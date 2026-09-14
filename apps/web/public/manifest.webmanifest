@@ -1,0 +1,13 @@
+{
+  "name": "Plataforma JR Gestión Integral",
+  "short_name": "Plataforma JR",
+  "description": "Base tecnológica administrativa de JR Gestión Integral S.A.S.",
+  "lang": "es-CO",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F8FB",
+  "theme_color": "#052B62",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

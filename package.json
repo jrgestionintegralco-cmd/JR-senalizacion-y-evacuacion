@@ -1,0 +1,20 @@
+{
+  "name": "jr-plataforma",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,green \"npm run dev -w @jr/api\" \"npm run dev -w @jr/web\"",
+    "build": "npm run build -w @jr/api && npm run build -w @jr/web",
+    "test": "npm run test -w @jr/api && npm run test -w @jr/web",
+    "typecheck": "npm run typecheck -w @jr/api && npm run typecheck -w @jr/web",
+    "seed": "npm run seed -w @jr/api",
+    "start": "npm run start -w @jr/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
