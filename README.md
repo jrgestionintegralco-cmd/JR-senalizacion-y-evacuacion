@@ -1,8 +1,8 @@
-# Plataforma JR — Etapa 1
+# Plataforma JR — Etapas 1 y 2
 
-Base tecnológica independiente de **JR Gestión Integral S.A.S.** Esta entrega implementa exclusivamente la Etapa 1 aprobada: PWA, autenticación, usuarios, roles y permisos, PostgreSQL/PostGIS, archivos privados, auditoría, configuración, copias de seguridad, monitoreo e identidad visual.
+Plataforma tecnológica independiente de **JR Gestión Integral S.A.S.** La Etapa 1 aporta PWA, autenticación, usuarios, roles y permisos, PostgreSQL/PostGIS, archivos privados, auditoría, configuración, copias de seguridad, monitoreo e identidad visual. La Etapa 2 incorpora exclusivamente gestión de clientes, establecimientos y proyectos.
 
-No contiene clientes, establecimientos, proyectos, plantas, editor geométrico, rutas de evacuación, IA ni BIM.
+No contiene plantas, carga de planos, editor geométrico, inspecciones, rutas de evacuación, señalización, IA ni BIM.
 
 ## Requisitos
 
@@ -22,6 +22,15 @@ docker compose exec api node apps/api/dist/seed.js
 ```
 
 4. Abra <http://localhost:8080> e ingrese con `INITIAL_ADMIN_EMAIL` y `INITIAL_ADMIN_PASSWORD`.
+
+En una instalación existente de la Etapa 1, aplique una sola vez la migración de Etapa 2 antes de reconstruir los servicios:
+
+```powershell
+Get-Content -Raw .\infra\db\init\002_stage2.sql | docker compose exec -T postgres psql -U jr_app -d jr_platform
+docker compose up --build -d
+```
+
+Las instalaciones nuevas aplican automáticamente `001_platform.sql` y `002_stage2.sql` al crear el volumen de PostgreSQL.
 
 Servicios de operación:
 
@@ -71,4 +80,4 @@ La copia usa formato personalizado de PostgreSQL, calcula SHA-256 y elimina auto
 - Ejecute copias automáticas fuera del servidor principal y valide restauraciones periódicamente.
 - Mantenga las imágenes Docker y dependencias actualizadas mediante un proceso controlado.
 
-La arquitectura y los criterios de aceptación se documentan en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y el resultado verificado en [docs/INFORME_ETAPA_1.md](docs/INFORME_ETAPA_1.md).
+La base tecnológica se documenta en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/INFORME_ETAPA_1.md](docs/INFORME_ETAPA_1.md). La Etapa 2 se documenta en [docs/ARQUITECTURA_ETAPA_2.md](docs/ARQUITECTURA_ETAPA_2.md) y [docs/INFORME_ETAPA_2.md](docs/INFORME_ETAPA_2.md).

@@ -11,12 +11,12 @@ describe('alcance e instalación PWA', () => {
     expect(manifest.start_url).toBe('/');
   });
 
-  it('limita la navegación a funciones de Etapa 1', () => {
+  it('incluye únicamente los dominios operativos autorizados para la Etapa 2', () => {
     const source = readFileSync(fileURLToPath(new URL('./App.tsx', import.meta.url)), 'utf8');
-    for (const section of ['Usuarios', 'Roles y permisos', 'Almacenamiento', 'Auditoría', 'Configuración']) {
+    for (const section of ['Clientes', 'Establecimientos', 'Proyectos', 'Usuarios', 'Roles y permisos', 'Almacenamiento', 'Auditoría', 'Configuración']) {
       expect(source).toContain(section);
     }
-    for (const forbidden of ["label: 'Clientes'", "label: 'Proyectos'", "label: 'Plantas'", "label: 'Rutas'"]) {
+    for (const forbidden of ["label: 'Plantas'", "label: 'Planos'", "label: 'Señalización'", "label: 'Rutas'", "label: 'IA'", "label: 'BIM'"]) {
       expect(source).not.toContain(forbidden);
     }
   });

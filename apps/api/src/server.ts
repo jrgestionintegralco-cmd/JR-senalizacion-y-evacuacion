@@ -12,6 +12,7 @@ import { authenticate, authorize, cookieOptions, SESSION_COOKIE } from './auth.j
 import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, assertSafeObjectKey, verifyPassword } from './security.js';
 import { recordAudit } from './audit.js';
 import { createStorage } from './storage.js';
+import { registerStage2Routes } from './modules/stage2.js';
 import './types.js';
 
 const loginSchema = z.object({ email: z.email(), password: z.string().min(1).max(256) });
@@ -115,13 +116,21 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
 
   app.get('/platform/summary', { preHandler: guard('platform.dashboard.read') }, async (request) => {
     const org = request.authUser!.organizationId;
-    const [users, roles, events, files] = await Promise.all([
+    const [users, roles, events, files, clients, establishments, projects] = await Promise.all([
       db.query<{ count: string }>('SELECT count(*) FROM users WHERE organization_id = $1', [org]),
       db.query<{ count: string }>('SELECT count(*) FROM roles WHERE organization_id = $1', [org]),
       db.query<{ count: string }>("SELECT count(*) FROM audit_events WHERE organization_id = $1 AND occurred_at > now() - interval '24 hours'", [org]),
-      db.query<{ count: string }>('SELECT count(*) FROM stored_files WHERE organization_id = $1', [org])
+      db.query<{ count: string }>('SELECT count(*) FROM stored_files WHERE organization_id = $1', [org]),
+      db.query<{ count: string }>('SELECT count(*) FROM clients WHERE organization_id = $1 AND status = $2', [org, 'active']),
+      db.query<{ count: string }>('SELECT count(*) FROM establishments WHERE organization_id = $1 AND status = $2', [org, 'active']),
+      db.query<{ count: string }>("SELECT count(*) FROM projects WHERE organization_id = $1 AND status NOT IN ('completed','cancelled')", [org])
     ]);
-    return { users: Number(users.rows[0].count), roles: Number(roles.rows[0].count), events24h: Number(events.rows[0].count), files: Number(files.rows[0].count) };
+    return {
+      users: Number(users.rows[0].count), roles: Number(roles.rows[0].count),
+      events24h: Number(events.rows[0].count), files: Number(files.rows[0].count),
+      clients: Number(clients.rows[0].count), establishments: Number(establishments.rows[0].count),
+      activeProjects: Number(projects.rows[0].count)
+    };
   });
 
   app.get('/users', { preHandler: guard('users.read') }, async (request) => {
@@ -277,6 +286,8 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
     await recordAudit(db, request, 'file.upload.request', 'stored_file', result.rows[0].id, { name: parsed.data.name, sizeBytes: parsed.data.sizeBytes });
     return reply.code(201).send({ id: result.rows[0].id, objectKey, uploadUrl, expiresInSeconds: 300 });
   });
+
+  await registerStage2Routes(app, db, guard);
 
   app.setErrorHandler(async (error, request, reply) => {
     request.log.error(error);
