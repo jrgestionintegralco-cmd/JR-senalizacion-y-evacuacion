@@ -1,8 +1,8 @@
 # Informe de entrega — Etapa 1
 
 **Proyecto:** Plataforma web independiente de JR Gestión Integral S.A.S.  
-**Fecha de verificación:** 14 de septiembre de 2026  
-**Estado:** Implementación terminada con validaciones locales aprobadas
+**Fecha de verificación:** 22 de septiembre de 2026
+**Estado:** Implementación terminada con validación integrada local aprobada
 
 ## Resumen ejecutivo
 
@@ -81,20 +81,29 @@ Se construyó desde cero la base tecnológica independiente de JR. La solución 
 | Arranque real de API compilada y `/health/live` | HTTP 200, aprobada |
 | Auditoría de dependencias de producción | 0 vulnerabilidades |
 | Respuesta HTTP de vista previa PWA | HTTP 200, aprobada |
+| Docker Compose con PostgreSQL/PostGIS, MinIO, API, web y Prometheus | Aprobada |
+| Disponibilidad integrada `/health/ready` | `ready`, PostgreSQL y PostGIS aprobados |
+| Inicio de sesión con administrador inicial | HTTP 200, aprobado |
+| Carga real de archivo mediante URL temporal a MinIO | HTTP 200, aprobada |
+| Respaldo PostgreSQL en formato personalizado | Creado y verificado con SHA-256 |
+| Restauración en base temporal aislada | Aprobada; esquema, PostGIS y registros verificados |
 
 Vitest informa dos vulnerabilidades moderadas sin corrección disponible en una dependencia usada solo durante las pruebas (`@vitest/mocker`). No está incluida en el código servido en producción; `npm audit --omit=dev` reportó cero vulnerabilidades.
 
-## Validación pendiente por limitación del equipo
+## Validación integrada completada
 
-Docker no está instalado en el equipo donde se realizó esta entrega. Por ello no fue posible ejecutar aquí la prueba integrada de los contenedores PostgreSQL/PostGIS y MinIO ni una restauración real. La composición, el esquema y los scripts quedaron preparados, y la prueba `/health/ready` validará ambos PostgreSQL y PostGIS al iniciar el entorno.
+Docker Desktop y WSL 2 quedaron instalados en el equipo de verificación. Se construyó y levantó la composición completa, se ejecutó la semilla del administrador y se comprobó la operación conjunta de la PWA, la API, PostgreSQL/PostGIS, MinIO y Prometheus. La prueba `/health/ready` confirmó PostgreSQL y PostGIS, el inicio de sesión respondió HTTP 200 y una carga real a MinIO mediante URL temporal respondió HTTP 200.
 
-Antes de producción se debe completar:
+El 22 de septiembre de 2026 se generó `jr-platform-20260922-113307.dump`, con SHA-256 `3acb9fde3224b03f024a4688dc791c0407e45cfa07e947a2dc6224c2916d761e`. La copia se restauró en una base temporal independiente y se verificaron la extensión PostGIS y los registros esenciales. La base temporal se eliminó al terminar y la copia permanece en el directorio local `backups`.
 
-- instalar Docker Desktop;
-- levantar la composición y comprobar `/health/ready`;
-- cargar y descargar un archivo de prueba;
-- generar un respaldo y restaurarlo en un ambiente de prueba;
-- reemplazar todas las claves de ejemplo y habilitar HTTPS/`COOKIE_SECURE=true`.
+Las imágenes históricas de MinIO se conservaron en las mismas versiones aprobadas, usando su registro oficial `quay.io`, debido a que dejaron de estar disponibles en Docker Hub. Para producción debe revisarse la estrategia de almacenamiento S3 y soporte antes del despliegue definitivo.
+
+Antes de producción todavía se debe completar:
+
+- definir el proveedor y la política de soporte del almacenamiento S3 de producción;
+- custodiar y rotar las credenciales definitivas;
+- habilitar HTTPS y `COOKIE_SECURE=true`;
+- restringir PostgreSQL, MinIO y Prometheus a una red privada.
 
 ## Cómo abrir la aplicación
 
@@ -124,4 +133,4 @@ Los volúmenes de datos se conservan. No use `docker compose down -v` salvo que 
 
 ## Criterio de cierre
 
-La Etapa 1 está terminada en código y supera todas las validaciones ejecutables en el entorno disponible. Su cierre operativo queda condicionado únicamente a la prueba integrada con Docker/PostGIS/MinIO y al ensayo de restauración indicados anteriormente.
+La Etapa 1 queda cerrada formalmente en el entorno local: está terminada en código y supera las validaciones automatizadas, integradas y de respaldo/restauración ejecutadas. Su paso a producción queda condicionado únicamente al endurecimiento operativo indicado anteriormente.
