@@ -26,6 +26,22 @@ export function Stage3Page() {
   const shownBuildings = useMemo(() => buildings.filter((item) => !projectFilter || item.projectId === projectFilter), [buildings, projectFilter]);
   const shownFloors = useMemo(() => floors.filter((item) => (!projectFilter || item.projectId === projectFilter) && (!buildingFilter || item.buildingId === buildingFilter)), [floors, projectFilter, buildingFilter]);
   const shownPlans = useMemo(() => plans.filter((item) => (!projectFilter || floors.find((floor) => floor.id === item.floorId)?.projectId === projectFilter) && (!buildingFilter || item.buildingId === buildingFilter)), [plans, floors, projectFilter, buildingFilter]);
+  const availableProjects = projects.filter((project) => !['completed', 'cancelled'].includes(project.status));
+  const availableBuildings = buildings.filter((building) => building.status === 'active');
+  function openNewBuilding() {
+    if (!availableProjects.length) {
+      setMessage('Para crear un edificio, primero registra un cliente, un establecimiento y un proyecto que no esté completado ni cancelado.');
+      return;
+    }
+    setMessage(''); setBuildingModal(null);
+  }
+  function openNewFloor() {
+    if (!availableBuildings.length) {
+      setMessage('Para crear una planta, primero registra un edificio activo.');
+      return;
+    }
+    setMessage(''); setFloorModal(null);
+  }
 
   async function saveBuilding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget); const selected = buildingModal;
@@ -68,11 +84,11 @@ export function Stage3Page() {
     {message && <div className="alert info">{message}</div>}
     <section className="panel stage3-filters"><label>Proyecto<select value={projectFilter} onChange={(event) => { setProjectFilter(event.target.value); setBuildingFilter(''); }}><option value="">Todos los proyectos</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Edificio<select value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}><option value="">Todos los edificios</option>{shownBuildings.map((building) => <option key={building.id} value={building.id}>{building.name}</option>)}</select></label></section>
 
-    <section className="panel stage3-section"><div className="panel-head"><div><h3><Building size={20} /> Edificios</h3><p>Edificaciones pertenecientes a un proyecto.</p></div><button className="primary" disabled={!projects.some((project) => !['completed', 'cancelled'].includes(project.status))} onClick={() => setBuildingModal(null)}><Plus size={17} /> Nuevo edificio</button></div>
-      {shownBuildings.length === 0 ? <div className="empty"><Building size={30} /><h3>Aún no hay edificios</h3><p>Crea un proyecto y registra su primera edificación.</p></div> : <div className="table-scroll"><table><thead><tr><th>Edificio</th><th>Proyecto</th><th>Establecimiento</th><th>Plantas</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{shownBuildings.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><br /><small>{item.code || 'Sin código'}</small></td><td>{item.projectName}</td><td>{item.establishmentName}</td><td>{item.floorCount}</td><td><span className={`badge ${item.status}`}>{item.status === 'active' ? 'Activo' : 'Inactivo'}</span></td><td><div className="row-actions"><button className="text-button" onClick={() => setBuildingModal(item)}><Pencil size={14} /> Editar</button><button className="text-button" onClick={() => toggle('buildings', item)}>{item.status === 'active' ? 'Inactivar' : 'Activar'}</button></div></td></tr>)}</tbody></table></div>}
+    <section className="panel stage3-section"><div className="panel-head"><div><h3><Building size={20} /> Edificios</h3><p>Edificaciones pertenecientes a un proyecto.</p></div><button className="primary" onClick={openNewBuilding}><Plus size={17} /> Nuevo edificio</button></div>
+      {shownBuildings.length === 0 ? <div className="empty"><Building size={30} /><h3>Aún no hay edificios</h3><p>Orden requerido: cliente → establecimiento → proyecto → edificio.</p></div> : <div className="table-scroll"><table><thead><tr><th>Edificio</th><th>Proyecto</th><th>Establecimiento</th><th>Plantas</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{shownBuildings.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><br /><small>{item.code || 'Sin código'}</small></td><td>{item.projectName}</td><td>{item.establishmentName}</td><td>{item.floorCount}</td><td><span className={`badge ${item.status}`}>{item.status === 'active' ? 'Activo' : 'Inactivo'}</span></td><td><div className="row-actions"><button className="text-button" onClick={() => setBuildingModal(item)}><Pencil size={14} /> Editar</button><button className="text-button" onClick={() => toggle('buildings', item)}>{item.status === 'active' ? 'Inactivar' : 'Activar'}</button></div></td></tr>)}</tbody></table></div>}
     </section>
 
-    <section className="panel stage3-section"><div className="panel-head"><div><h3><Layers3 size={20} /> Plantas</h3><p>Niveles físicos de cada edificio.</p></div><button className="primary" disabled={!buildings.some((building) => building.status === 'active')} onClick={() => setFloorModal(null)}><Plus size={17} /> Nueva planta</button></div>
+    <section className="panel stage3-section"><div className="panel-head"><div><h3><Layers3 size={20} /> Plantas</h3><p>Niveles físicos de cada edificio.</p></div><button className="primary" onClick={openNewFloor}><Plus size={17} /> Nueva planta</button></div>
       {shownFloors.length === 0 ? <div className="empty"><Layers3 size={30} /><h3>Aún no hay plantas</h3><p>Registra un edificio activo y añade sus niveles.</p></div> : <div className="table-scroll"><table><thead><tr><th>Planta</th><th>Edificio</th><th>Nivel</th><th>Elevación</th><th>Planos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{shownFloors.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><br /><small>{item.code || 'Sin código'}</small></td><td>{item.buildingName}<br /><small>{item.projectName}</small></td><td>{item.levelNumber}</td><td>{item.elevationM == null ? '—' : `${item.elevationM} m`}</td><td>{item.planCount}</td><td><span className={`badge ${item.status}`}>{item.status === 'active' ? 'Activo' : 'Inactivo'}</span></td><td><div className="row-actions"><button className="text-button" onClick={() => setFloorModal(item)}><Pencil size={14} /> Editar</button><button className="text-button" onClick={() => setUploadFloor(item)} disabled={item.status !== 'active'}><FileUp size={14} /> Cargar plano</button><button className="text-button" onClick={() => toggle('floors', item)}>{item.status === 'active' ? 'Inactivar' : 'Activar'}</button></div></td></tr>)}</tbody></table></div>}
     </section>
 
