@@ -17,7 +17,8 @@ export function Stage3Page() {
   const [floors, setFloors] = useState<FloorRow[]>([]); const [plans, setPlans] = useState<PlanRow[]>([]);
   const [projectFilter, setProjectFilter] = useState(''); const [buildingFilter, setBuildingFilter] = useState('');
   const [buildingModal, setBuildingModal] = useState<BuildingRow | null | undefined>(); const [floorModal, setFloorModal] = useState<FloorRow | null | undefined>();
-  const [uploadFloor, setUploadFloor] = useState<FloorRow | null>(null); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const [uploadFloor, setUploadFloor] = useState<FloorRow | null>(null); const [guidance, setGuidance] = useState<'building' | 'floor' | null>(null);
+  const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const load = () => Promise.all([
     api<{ projects: Project[] }>('/projects'), api<{ buildings: BuildingRow[] }>('/buildings'),
     api<{ floors: FloorRow[] }>('/floors'), api<{ plans: PlanRow[] }>('/floor-plans')
@@ -30,14 +31,14 @@ export function Stage3Page() {
   const availableBuildings = buildings.filter((building) => building.status === 'active');
   function openNewBuilding() {
     if (!availableProjects.length) {
-      setMessage('Para crear un edificio, primero registra un cliente, un establecimiento y un proyecto que no esté completado ni cancelado.');
+      setGuidance('building');
       return;
     }
     setMessage(''); setBuildingModal(null);
   }
   function openNewFloor() {
     if (!availableBuildings.length) {
-      setMessage('Para crear una planta, primero registra un edificio activo.');
+      setGuidance('floor');
       return;
     }
     setMessage(''); setFloorModal(null);
@@ -99,5 +100,6 @@ export function Stage3Page() {
     {buildingModal !== undefined && <div className="modal-backdrop"><section className="modal wide-modal" role="dialog" aria-modal="true"><button className="icon-button close" onClick={() => setBuildingModal(undefined)} aria-label="Cerrar"><X /></button><p className="eyebrow">Etapa 3</p><h3>{buildingModal ? 'Editar edificio' : 'Nuevo edificio'}</h3><form className="entity-form" onSubmit={saveBuilding}><label className="full">Proyecto<select name="projectId" required defaultValue={buildingModal?.projectId ?? projectFilter}><option value="" disabled>Seleccionar proyecto</option>{projects.filter((project) => !['completed', 'cancelled'].includes(project.status) || project.id === buildingModal?.projectId).map((project) => <option key={project.id} value={project.id}>{project.name} · {project.establishmentName}</option>)}</select></label><label>Nombre<input name="name" required defaultValue={buildingModal?.name} /></label><label>Código<input name="code" defaultValue={buildingModal?.code ?? ''} /></label><label className="full">Descripción<textarea name="description" maxLength={1000} defaultValue={buildingModal?.description ?? ''} /></label><div className="modal-actions full"><button type="button" className="secondary" onClick={() => setBuildingModal(undefined)}>Cancelar</button><button className="primary">Guardar edificio</button></div></form></section></div>}
     {floorModal !== undefined && <div className="modal-backdrop"><section className="modal wide-modal" role="dialog" aria-modal="true"><button className="icon-button close" onClick={() => setFloorModal(undefined)} aria-label="Cerrar"><X /></button><p className="eyebrow">Etapa 3</p><h3>{floorModal ? 'Editar planta' : 'Nueva planta'}</h3><form className="entity-form" onSubmit={saveFloor}>{floorModal ? <label className="full">Edificio<input disabled value={floorModal.buildingName} /></label> : <label className="full">Edificio<select name="buildingId" required defaultValue={buildingFilter}><option value="" disabled>Seleccionar edificio</option>{buildings.filter((building) => building.status === 'active').map((building) => <option key={building.id} value={building.id}>{building.name} · {building.projectName}</option>)}</select></label>}<label>Nombre<input name="name" required defaultValue={floorModal?.name} /></label><label>Código<input name="code" defaultValue={floorModal?.code ?? ''} /></label><label>Número de nivel<input name="levelNumber" type="number" min="-20" max="300" required defaultValue={floorModal?.levelNumber ?? 0} /></label><label>Elevación (m)<input name="elevationM" type="number" step="0.01" defaultValue={floorModal?.elevationM ?? ''} /></label><label className="full">Descripción<textarea name="description" maxLength={1000} defaultValue={floorModal?.description ?? ''} /></label><div className="modal-actions full"><button type="button" className="secondary" onClick={() => setFloorModal(undefined)}>Cancelar</button><button className="primary">Guardar planta</button></div></form></section></div>}
     {uploadFloor && <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true"><button className="icon-button close" onClick={() => setUploadFloor(null)} aria-label="Cerrar"><X /></button><p className="eyebrow">Plano de {uploadFloor.name}</p><h3>Cargar nueva versión</h3><form onSubmit={upload}><label>Título del plano<input name="title" required minLength={2} placeholder="Plano arquitectónico" /></label><label>Archivo<input name="file" type="file" accept="application/pdf,image/png,image/jpeg" required /><small>PDF, PNG o JPG. Máximo según configuración de la plataforma.</small></label><div className="modal-actions"><button type="button" className="secondary" onClick={() => setUploadFloor(null)}>Cancelar</button><button className="primary" disabled={busy}>{busy ? 'Cargando…' : 'Cargar plano'}</button></div></form></section></div>}
+    {guidance && <div className="modal-backdrop"><section className="modal prerequisite-modal" role="dialog" aria-modal="true" aria-labelledby="prerequisite-title"><button className="icon-button close" onClick={() => setGuidance(null)} aria-label="Cerrar"><X /></button><p className="eyebrow">Antes de continuar</p><h3 id="prerequisite-title">{guidance === 'building' ? 'Primero debes crear un proyecto' : 'Primero debes crear un edificio'}</h3>{guidance === 'building' ? <><p>Los edificios siempre pertenecen a un proyecto. Registra la información en este orden:</p><ol><li>Cliente</li><li>Establecimiento</li><li>Proyecto</li><li>Edificio</li></ol></> : <p>Las plantas siempre pertenecen a un edificio. Crea o activa un edificio y luego vuelve a esta opción.</p>}<div className="modal-actions"><button type="button" className="primary" onClick={() => setGuidance(null)}>Entendido</button></div></section></div>}
   </>;
 }

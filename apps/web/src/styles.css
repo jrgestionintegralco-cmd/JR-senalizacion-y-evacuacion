@@ -135,6 +135,8 @@ td { padding:16px 20px; border-top:1px solid #edf0f4; font-size:.82rem; color:#5
 .stage3-section>.panel-head h3 { display:flex; align-items:center; gap:9px; }
 .stage3-section>.panel-head p { margin-top:4px; }
 .stage3-section>.table-scroll { border-radius:0 0 16px 16px; }
+.prerequisite-modal>p { color:var(--muted); line-height:1.6; }
+.prerequisite-modal ol { margin:18px 0 4px; padding-left:24px; display:grid; gap:10px; color:var(--navy); font-weight:750; }
 
 .modal-backdrop { position:fixed; inset:0; background:rgba(9,24,44,.62); backdrop-filter:blur(3px); z-index:50; display:grid; place-items:center; padding:20px; }
 .modal { width:min(100%,520px); max-height:90vh; overflow:auto; padding:28px; background:#fff; border-radius:14px; box-shadow:0 25px 80px rgba(0,0,0,.25); position:relative; }
