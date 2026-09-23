@@ -4,7 +4,7 @@
 
 **Fecha de verificación:** 22 de septiembre de 2026
 
-**Estado:** Implementación terminada y validación integrada aprobada
+**Estado:** Cerrada formalmente, validada y respaldada
 
 ## Funciones entregadas
 
@@ -38,6 +38,18 @@
 | Listado de la versión cargada | 1 resultado |
 | Descarga y tamaño del archivo | 195989 bytes verificados |
 | Limpieza de datos y objeto temporales | Completada |
+
+## Cierre formal
+
+La prueba de aceptación realizada por JR confirmó la creación de cliente, establecimiento, proyecto, edificio y planta, además de la carga y descarga satisfactoria de un plano.
+
+El 22 de septiembre de 2026 se eliminó exclusivamente la cadena de prueba `Empresa Prueba JR` y su objeto privado. La acción quedó registrada en auditoría como `stage3.test.cleanup`.
+
+Antes de la limpieza se creó el respaldo recuperable `jr-platform-stage3-precleanup-20260922-222526.dump`, con SHA-256 `817739b6b0e7f0b1a145c0075b41bf323d5fa65f64b22c594a50ab0eadad574f`.
+
+Durante la comprobación se encontró además un archivo técnico huérfano de la verificación de la Etapa 1. Se retiraron su registro pendiente y su objeto privado, dejando cero archivos almacenados y cero registros de dominio de prueba.
+
+Después de la limpieza completa se creó el respaldo operativo final `jr-platform-stage3-final-20260922-223101.dump`, con SHA-256 `2de455ed6b8ea8157e51efa52807328b151fefd9fc5b6b00f8e457131ec2900a`. Este respaldo se restauró correctamente en una base temporal y se verificaron PostGIS, cero clientes, cero archivos, cero planos y los seis permisos de la Etapa 3. La base temporal fue retirada al finalizar.
 
 ## Límites confirmados
 
