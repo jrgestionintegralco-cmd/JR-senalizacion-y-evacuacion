@@ -11,6 +11,7 @@ const schema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(72).default(8),
   COOKIE_SECURE: booleanValue,
   S3_ENDPOINT: z.string().url(),
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().min(3),
   S3_ACCESS_KEY: z.string().min(3),
@@ -26,5 +27,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!result.success) {
     throw new Error(`Configuración inválida: ${z.prettifyError(result.error)}`);
   }
-  return result.data;
+  return { ...result.data, S3_PUBLIC_ENDPOINT: result.data.S3_PUBLIC_ENDPOINT ?? result.data.S3_ENDPOINT };
 }

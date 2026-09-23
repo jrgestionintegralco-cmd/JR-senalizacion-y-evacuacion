@@ -13,6 +13,7 @@ import { createSessionToken, hashPassword, hashSessionToken, normalizeEmail, ass
 import { recordAudit } from './audit.js';
 import { createStorage } from './storage.js';
 import { registerStage2Routes } from './modules/stage2.js';
+import { registerStage3Routes } from './modules/stage3.js';
 import './types.js';
 
 const loginSchema = z.object({ email: z.email(), password: z.string().min(1).max(256) });
@@ -116,20 +117,24 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
 
   app.get('/platform/summary', { preHandler: guard('platform.dashboard.read') }, async (request) => {
     const org = request.authUser!.organizationId;
-    const [users, roles, events, files, clients, establishments, projects] = await Promise.all([
+    const [users, roles, events, files, clients, establishments, projects, buildings, floors, plans] = await Promise.all([
       db.query<{ count: string }>('SELECT count(*) FROM users WHERE organization_id = $1', [org]),
       db.query<{ count: string }>('SELECT count(*) FROM roles WHERE organization_id = $1', [org]),
       db.query<{ count: string }>("SELECT count(*) FROM audit_events WHERE organization_id = $1 AND occurred_at > now() - interval '24 hours'", [org]),
       db.query<{ count: string }>('SELECT count(*) FROM stored_files WHERE organization_id = $1', [org]),
       db.query<{ count: string }>('SELECT count(*) FROM clients WHERE organization_id = $1 AND status = $2', [org, 'active']),
       db.query<{ count: string }>('SELECT count(*) FROM establishments WHERE organization_id = $1 AND status = $2', [org, 'active']),
-      db.query<{ count: string }>("SELECT count(*) FROM projects WHERE organization_id = $1 AND status NOT IN ('completed','cancelled')", [org])
+      db.query<{ count: string }>("SELECT count(*) FROM projects WHERE organization_id = $1 AND status NOT IN ('completed','cancelled')", [org]),
+      db.query<{ count: string }>('SELECT count(*) FROM buildings WHERE organization_id = $1 AND status = $2', [org, 'active']),
+      db.query<{ count: string }>('SELECT count(*) FROM floors WHERE organization_id = $1 AND status = $2', [org, 'active']),
+      db.query<{ count: string }>("SELECT count(*) FROM floor_plans WHERE organization_id = $1 AND status = 'ready'", [org])
     ]);
     return {
       users: Number(users.rows[0].count), roles: Number(roles.rows[0].count),
       events24h: Number(events.rows[0].count), files: Number(files.rows[0].count),
       clients: Number(clients.rows[0].count), establishments: Number(establishments.rows[0].count),
-      activeProjects: Number(projects.rows[0].count)
+      activeProjects: Number(projects.rows[0].count), buildings: Number(buildings.rows[0].count),
+      floors: Number(floors.rows[0].count), readyPlans: Number(plans.rows[0].count)
     };
   });
 
@@ -288,9 +293,14 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
   });
 
   await registerStage2Routes(app, db, guard);
+  await registerStage3Routes(app, db, storage, config.MAX_UPLOAD_BYTES, guard);
 
   app.setErrorHandler(async (error, request, reply) => {
     request.log.error(error);
+    const statusCode = (error as { statusCode?: number }).statusCode;
+    if (statusCode && statusCode >= 400 && statusCode < 500) {
+      return reply.code(statusCode).send({ error: 'INVALID_REQUEST', message: 'La solicitud no tiene un formato válido.' });
+    }
     return reply.code(500).send({ error: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' });
   });
 

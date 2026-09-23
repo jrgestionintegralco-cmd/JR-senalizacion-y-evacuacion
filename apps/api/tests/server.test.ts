@@ -38,7 +38,7 @@ describe('contrato HTTP básico', () => {
 
   it('protege los módulos administrativos sin una sesión', async () => {
     const app = await buildServer({ config, db: fakeDatabase() });
-    for (const url of ['/users', '/clients', '/establishments', '/projects']) {
+    for (const url of ['/users', '/clients', '/establishments', '/projects', '/buildings', '/floors', '/floor-plans']) {
       const response = await app.inject({ method: 'GET', url });
       expect(response.statusCode).toBe(401);
       expect(response.json()).toMatchObject({ error: 'AUTH_REQUIRED' });

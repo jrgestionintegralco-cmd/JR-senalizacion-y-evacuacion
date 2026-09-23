@@ -1,14 +1,15 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   Activity, Archive, BriefcaseBusiness, Building2, ChevronRight, CircleUserRound, FileKey2, Gauge, KeyRound, LogOut,
-  MapPin, Menu, RefreshCw, Search, Settings, ShieldCheck, UserPlus, Users, X
+  MapPin, Menu, RefreshCw, Search, Settings, ShieldCheck, UserPlus, Users, X, Layers3
 } from 'lucide-react';
 import { api, ApiError } from './api';
 import { ClientsPage, EstablishmentsPage, ProjectsPage } from './stage2';
+import { Stage3Page } from './stage3';
 
 type UserSession = { id: string; email: string; fullName: string; permissions: string[] };
-type Section = 'overview' | 'clients' | 'establishments' | 'projects' | 'users' | 'roles' | 'audit' | 'settings' | 'storage';
-type Summary = { users: number; roles: number; events24h: number; files: number; clients: number; establishments: number; activeProjects: number };
+type Section = 'overview' | 'clients' | 'establishments' | 'projects' | 'infrastructure' | 'users' | 'roles' | 'audit' | 'settings' | 'storage';
+type Summary = { users: number; roles: number; events24h: number; files: number; clients: number; establishments: number; activeProjects: number; buildings: number; floors: number; readyPlans: number };
 type Role = { id: string; code: string; name: string; description: string; isSystem: boolean; permissions: string[]; userCount: number };
 type UserRow = { id: string; email: string; fullName: string; status: 'active' | 'suspended'; lastLoginAt: string | null; createdAt: string; roles: { id: string; name: string }[] };
 type AuditEvent = { id: number; action: string; entityType: string; entityId: string | null; outcome: string; occurredAt: string; actorName: string | null; actorEmail: string | null; metadata: Record<string, unknown> };
@@ -18,6 +19,7 @@ const nav: { id: Section; label: string; icon: typeof Gauge }[] = [
   { id: 'clients', label: 'Clientes', icon: Building2 },
   { id: 'establishments', label: 'Establecimientos', icon: MapPin },
   { id: 'projects', label: 'Proyectos', icon: BriefcaseBusiness },
+  { id: 'infrastructure', label: 'Edificios y plantas', icon: Layers3 },
   { id: 'users', label: 'Usuarios', icon: Users },
   { id: 'roles', label: 'Roles y permisos', icon: ShieldCheck },
   { id: 'storage', label: 'Almacenamiento', icon: Archive },
@@ -80,21 +82,24 @@ function Overview() {
     { label: 'Clientes activos', value: data?.clients, icon: Building2 },
     { label: 'Establecimientos activos', value: data?.establishments, icon: MapPin },
     { label: 'Proyectos en curso', value: data?.activeProjects, icon: BriefcaseBusiness },
+    { label: 'Edificios activos', value: data?.buildings, icon: Building2 },
+    { label: 'Plantas activas', value: data?.floors, icon: Layers3 },
+    { label: 'Planos vigentes', value: data?.readyPlans, icon: FileKey2 },
     { label: 'Usuarios registrados', value: data?.users, icon: Users },
     { label: 'Roles configurados', value: data?.roles, icon: ShieldCheck },
     { label: 'Eventos en 24 horas', value: data?.events24h, icon: Activity },
     { label: 'Archivos registrados', value: data?.files, icon: Archive }
   ];
   return <>
-    <header className="page-heading"><div><p className="eyebrow">Estado de la plataforma</p><h2>Gestión integral JR</h2><p>Control central de clientes, establecimientos, proyectos y seguridad.</p></div><span className="status-pill"><i /> Operativa</span></header>
+    <header className="page-heading"><div><p className="eyebrow">Estado de la plataforma</p><h2>Gestión integral JR</h2><p>Control central de proyectos, edificios, plantas, planos y seguridad.</p></div><span className="status-pill"><i /> Operativa</span></header>
     {error && <div className="alert error">{error}</div>}
     <div className="stats-grid">{stats.map(({ label, value, icon: Icon }) => <article className="stat-card" key={label}><Icon size={21} /><strong>{value ?? '—'}</strong><span>{label}</span></article>)}</div>
     <div className="overview-grid">
       <section className="panel readiness">
-        <div className="panel-head"><div><h3>Capacidades activas</h3><p>Base tecnológica y gestión operativa de la Etapa 2.</p></div><span>9 / 9</span></div>
-        {['Autenticación y sesiones', 'Roles y permisos', 'Clientes', 'Establecimientos', 'Proyectos', 'PostgreSQL + PostGIS', 'Almacenamiento privado', 'Auditoría de actividad', 'Monitoreo y respaldos'].map((item) => <div className="check-row" key={item}><ShieldCheck size={18} /><span>{item}</span><b>Listo</b></div>)}
+        <div className="panel-head"><div><h3>Capacidades activas</h3><p>Base tecnológica y gestión física de la Etapa 3.</p></div><span>12 / 12</span></div>
+        {['Autenticación y sesiones', 'Roles y permisos', 'Clientes', 'Establecimientos', 'Proyectos', 'Edificios', 'Plantas', 'Carga versionada de planos', 'PostgreSQL + PostGIS', 'Almacenamiento privado', 'Auditoría de actividad', 'Monitoreo y respaldos'].map((item) => <div className="check-row" key={item}><ShieldCheck size={18} /><span>{item}</span><b>Listo</b></div>)}
       </section>
-      <section className="panel scope-card"><p className="eyebrow">Alcance actual</p><h3>Etapa 2 operativa</h3><p>Gestión trazable de clientes, establecimientos y proyectos sobre la base segura de JR.</p><div className="scope-rule" /><small>Plantas, planos, inspecciones, señalización, rutas, IA y BIM permanecen fuera de esta etapa.</small></section>
+      <section className="panel scope-card"><p className="eyebrow">Alcance actual</p><h3>Etapa 3 operativa</h3><p>Edificios, plantas y carga documental versionada de planos sobre la base segura de JR.</p><div className="scope-rule" /><small>Editor geométrico, inspecciones, señalización, rutas, IA y BIM permanecen fuera de esta etapa.</small></section>
     </div>
   </>;
 }
@@ -145,7 +150,7 @@ function RolesPage() {
 function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   useEffect(() => { api<{ events: AuditEvent[] }>('/audit?limit=100').then((r) => setEvents(r.events)); }, []);
-  const labels: Record<string, string> = { 'auth.login': 'Inicio de sesión', 'auth.logout': 'Cierre de sesión', 'user.create': 'Usuario creado', 'user.status.change': 'Estado de usuario', 'role.create': 'Rol creado', 'settings.update': 'Configuración actualizada', 'file.upload.request': 'Carga solicitada', 'client.create': 'Cliente creado', 'client.update': 'Cliente actualizado', 'client.status.change': 'Estado de cliente', 'establishment.create': 'Establecimiento creado', 'establishment.update': 'Establecimiento actualizado', 'establishment.status.change': 'Estado de establecimiento', 'project.create': 'Proyecto creado', 'project.update': 'Proyecto actualizado', 'project.status.change': 'Estado de proyecto' };
+  const labels: Record<string, string> = { 'auth.login': 'Inicio de sesión', 'auth.logout': 'Cierre de sesión', 'user.create': 'Usuario creado', 'user.status.change': 'Estado de usuario', 'role.create': 'Rol creado', 'settings.update': 'Configuración actualizada', 'file.upload.request': 'Carga solicitada', 'client.create': 'Cliente creado', 'client.update': 'Cliente actualizado', 'client.status.change': 'Estado de cliente', 'establishment.create': 'Establecimiento creado', 'establishment.update': 'Establecimiento actualizado', 'establishment.status.change': 'Estado de establecimiento', 'project.create': 'Proyecto creado', 'project.update': 'Proyecto actualizado', 'project.status.change': 'Estado de proyecto', 'building.create': 'Edificio creado', 'building.update': 'Edificio actualizado', 'building.status.change': 'Estado de edificio', 'floor.create': 'Planta creada', 'floor.update': 'Planta actualizada', 'floor.status.change': 'Estado de planta', 'plan.upload.request': 'Carga de plano solicitada', 'plan.upload.complete': 'Plano cargado', 'plan.download': 'Plano descargado' };
   return <><header className="page-heading"><div><p className="eyebrow">Trazabilidad</p><h2>Auditoría</h2><p>Registro inalterable de accesos y cambios administrativos.</p></div></header><section className="panel audit-list">{events.length === 0 && <div className="empty"><Activity size={30} /><h3>Aún no hay eventos</h3><p>La actividad aparecerá aquí cuando se registren acciones.</p></div>}{events.map((event) => <article key={event.id}><div className={`event-icon ${event.outcome}`}><Activity size={17} /></div><div><strong>{labels[event.action] ?? event.action}</strong><p>{event.actorName ?? event.actorEmail ?? 'Sistema'} · {event.entityType}</p></div><time>{formatDate(event.occurredAt)}</time></article>)}</section></>;
 }
 
@@ -163,8 +168,8 @@ function StoragePage() {
 function Shell({ user, onLogout }: { user: UserSession; onLogout: () => void }) {
   const [section, setSection] = useState<Section>('overview'); const [menu, setMenu] = useState(false);
   const title = nav.find((item) => item.id === section)?.label;
-  const content: Record<Section, React.ReactNode> = { overview: <Overview />, clients: <ClientsPage />, establishments: <EstablishmentsPage />, projects: <ProjectsPage />, users: <UsersPage />, roles: <RolesPage />, audit: <AuditPage />, settings: <SettingsPage />, storage: <StoragePage /> };
-  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="mobile-close" aria-label="Cerrar menú" onClick={() => setMenu(false)}><X /></button><div className="sidebar-brand"><img src="/logo-jr.jpg" alt="JR Gestión Integral S.A.S." /><span>Plataforma JR<small>Gestión integral</small></span></div><nav aria-label="Navegación principal">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMenu(false); }}><Icon size={19} /><span>{label}</span></button>)}</nav><div className="sidebar-foot"><div className="sidebar-scope"><ShieldCheck size={18} /><span><strong>Etapa 2</strong><small>Gestión operativa</small></span></div><button onClick={onLogout}><LogOut size={18} /> Cerrar sesión</button></div></aside>{menu && <button className="menu-scrim" aria-label="Cerrar menú" onClick={() => setMenu(false)} />}<main className="workspace"><div className="topbar"><button className="menu-button" onClick={() => setMenu(true)} aria-label="Abrir menú"><Menu /></button><span className="mobile-title">{title}</span><div className="user-chip"><CircleUserRound size={21} /><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div></div><div className="content">{content[section]}</div></main></div>;
+  const content: Record<Section, React.ReactNode> = { overview: <Overview />, clients: <ClientsPage />, establishments: <EstablishmentsPage />, projects: <ProjectsPage />, infrastructure: <Stage3Page />, users: <UsersPage />, roles: <RolesPage />, audit: <AuditPage />, settings: <SettingsPage />, storage: <StoragePage /> };
+  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="mobile-close" aria-label="Cerrar menú" onClick={() => setMenu(false)}><X /></button><div className="sidebar-brand"><img src="/logo-jr.jpg" alt="JR Gestión Integral S.A.S." /><span>Plataforma JR<small>Gestión integral</small></span></div><nav aria-label="Navegación principal">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMenu(false); }}><Icon size={19} /><span>{label}</span></button>)}</nav><div className="sidebar-foot"><div className="sidebar-scope"><ShieldCheck size={18} /><span><strong>Etapa 3</strong><small>Estructura física</small></span></div><button onClick={onLogout}><LogOut size={18} /> Cerrar sesión</button></div></aside>{menu && <button className="menu-scrim" aria-label="Cerrar menú" onClick={() => setMenu(false)} />}<main className="workspace"><div className="topbar"><button className="menu-button" onClick={() => setMenu(true)} aria-label="Abrir menú"><Menu /></button><span className="mobile-title">{title}</span><div className="user-chip"><CircleUserRound size={21} /><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div></div><div className="content">{content[section]}</div></main></div>;
 }
 
 export default function App() {
