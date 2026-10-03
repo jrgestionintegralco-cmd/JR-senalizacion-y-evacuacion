@@ -6,7 +6,8 @@ describe('alcance e instalación PWA', () => {
   it('declara una aplicación instalable con identidad JR', () => {
     const manifestPath = fileURLToPath(new URL('../public/manifest.webmanifest', import.meta.url));
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    expect(manifest.name).toContain('JR Gestión Integral');
+    expect(manifest.name).toBe('SAFE ENTER 360');
+    expect(manifest.short_name).toBe('SAFE ENTER 360');
     expect(manifest.display).toBe('standalone');
     expect(manifest.start_url).toBe('/');
   });

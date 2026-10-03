@@ -53,9 +53,9 @@ function Login({ onLogin }: { onLogin: (user: UserSession) => void }) {
       <div className="brand-line" />
       <img src="/logo-jr.jpg" alt="JR Gestión Integral S.A.S." />
       <div className="brand-copy">
-        <span>Plataforma corporativa</span>
+        <span>SAFE ENTER 360</span>
         <h1>Gestión segura,<br />trazable y confiable.</h1>
-        <p>Base tecnológica independiente para administrar el acceso y la operación digital de JR.</p>
+        <p>Subfase 4.0 · Planos privados, archivos validados y versiones protegidas.</p>
       </div>
       <small>JR Gestión Integral S.A.S. · Barranquilla, Colombia</small>
     </section>
@@ -91,15 +91,15 @@ function Overview() {
     { label: 'Archivos registrados', value: data?.files, icon: Archive }
   ];
   return <>
-    <header className="page-heading"><div><p className="eyebrow">Estado de la plataforma</p><h2>Gestión integral JR</h2><p>Control central de proyectos, edificios, plantas, planos y seguridad.</p></div><span className="status-pill"><i /> Operativa</span></header>
+    <header className="page-heading"><div><p className="eyebrow">Estado de la plataforma</p><h2>SAFE ENTER 360</h2><p>Control central de proyectos, edificios, plantas, planos y seguridad.</p></div><span className="status-pill"><i /> Operativa</span></header>
     {error && <div className="alert error">{error}</div>}
     <div className="stats-grid">{stats.map(({ label, value, icon: Icon }) => <article className="stat-card" key={label}><Icon size={21} /><strong>{value ?? '—'}</strong><span>{label}</span></article>)}</div>
     <div className="overview-grid">
       <section className="panel readiness">
-        <div className="panel-head"><div><h3>Capacidades activas</h3><p>Base tecnológica y gestión física de la Etapa 3.</p></div><span>12 / 12</span></div>
-        {['Autenticación y sesiones', 'Roles y permisos', 'Clientes', 'Establecimientos', 'Proyectos', 'Edificios', 'Plantas', 'Carga versionada de planos', 'PostgreSQL + PostGIS', 'Almacenamiento privado', 'Auditoría de actividad', 'Monitoreo y respaldos'].map((item) => <div className="check-row" key={item}><ShieldCheck size={18} /><span>{item}</span><b>Listo</b></div>)}
+        <div className="panel-head"><div><h3>Capacidades activas</h3><p>Base de las Etapas 1–3 con las protecciones de la Subfase 4.0.</p></div><span>12 / 12</span></div>
+        {['Autenticación y sesiones', 'Roles y permisos', 'Clientes', 'Establecimientos', 'Proyectos', 'Edificios', 'Plantas', 'Planos validados y versionados', 'PostgreSQL + PostGIS', 'Archivos privados protegidos', 'Auditoría de actividad', 'Respaldo integral y recuperación'].map((item) => <div className="check-row" key={item}><ShieldCheck size={18} /><span>{item}</span><b>Listo</b></div>)}
       </section>
-      <section className="panel scope-card"><p className="eyebrow">Alcance actual</p><h3>Etapa 3 operativa</h3><p>Edificios, plantas y carga documental versionada de planos sobre la base segura de JR.</p><div className="scope-rule" /><small>Editor geométrico, inspecciones, señalización, rutas, IA y BIM permanecen fuera de esta etapa.</small></section>
+      <section className="panel scope-card"><p className="eyebrow">Alcance actual</p><h3>Subfase 4.0 operativa</h3><p>Los planos se validan antes de quedar disponibles. Cada planta conserva una única versión vigente y su historial; reutilizar un enlace de carga no sobrescribe el archivo confirmado.</p><div className="scope-rule" /><small>Editor geométrico, inspecciones, señalización, rutas, IA y BIM permanecen fuera de esta etapa.</small></section>
     </div>
   </>;
 }
@@ -162,14 +162,14 @@ function SettingsPage() {
 }
 
 function StoragePage() {
-  return <><header className="page-heading"><div><p className="eyebrow">Archivos privados</p><h2>Almacenamiento</h2><p>Infraestructura segura compatible con S3 para documentos de la plataforma.</p></div></header><section className="panel storage-card"><div className="storage-icon"><FileKey2 size={32} /></div><div><h3>Almacenamiento preparado</h3><p>Las cargas usan enlaces temporales de cinco minutos, separación por organización y metadatos auditables.</p><ul><li>Contenedor privado</li><li>Límite configurable por archivo</li><li>Claves de objeto no predecibles</li><li>Credenciales separadas del código</li></ul></div><span className="status-pill"><i /> Disponible</span></section></>;
+  return <><header className="page-heading"><div><p className="eyebrow">Archivos privados</p><h2>Almacenamiento</h2><p>Infraestructura segura compatible con S3 para documentos de la plataforma.</p></div></header><section className="panel storage-card"><div className="storage-icon"><FileKey2 size={32} /></div><div><h3>Protección de planos · Subfase 4.0</h3><p>Las cargas y descargas usan enlaces temporales y acceso por organización. Antes de confirmar cada plano se comprueban su tamaño, formato y contenido.</p><ul><li>PDF, PNG y JPEG validados antes de estar disponibles</li><li>Copia definitiva protegida frente a reutilización del enlace de carga</li><li>Huella SHA-256 para comprobar la integridad del archivo</li><li>Una versión vigente por planta y versiones anteriores conservadas</li><li>API y descargas privadas excluidas de la caché de la aplicación</li><li>Herramientas de respaldo integral: base de datos y archivos; recuperación ensayada</li></ul></div><span className="status-pill"><i /> Disponible</span></section></>;
 }
 
 function Shell({ user, onLogout }: { user: UserSession; onLogout: () => void }) {
   const [section, setSection] = useState<Section>('overview'); const [menu, setMenu] = useState(false);
   const title = nav.find((item) => item.id === section)?.label;
   const content: Record<Section, React.ReactNode> = { overview: <Overview />, clients: <ClientsPage />, establishments: <EstablishmentsPage />, projects: <ProjectsPage />, infrastructure: <Stage3Page />, users: <UsersPage />, roles: <RolesPage />, audit: <AuditPage />, settings: <SettingsPage />, storage: <StoragePage /> };
-  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="mobile-close" aria-label="Cerrar menú" onClick={() => setMenu(false)}><X /></button><div className="sidebar-brand"><img src="/logo-jr.jpg" alt="JR Gestión Integral S.A.S." /><span>Plataforma JR<small>Gestión integral</small></span></div><nav aria-label="Navegación principal">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMenu(false); }}><Icon size={19} /><span>{label}</span></button>)}</nav><div className="sidebar-foot"><div className="sidebar-scope"><ShieldCheck size={18} /><span><strong>Etapa 3</strong><small>Estructura física</small></span></div><button onClick={onLogout}><LogOut size={18} /> Cerrar sesión</button></div></aside>{menu && <button className="menu-scrim" aria-label="Cerrar menú" onClick={() => setMenu(false)} />}<main className="workspace"><div className="topbar"><button className="menu-button" onClick={() => setMenu(true)} aria-label="Abrir menú"><Menu /></button><span className="mobile-title">{title}</span><div className="user-chip"><CircleUserRound size={21} /><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div></div><div className="content">{content[section]}</div></main></div>;
+  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="mobile-close" aria-label="Cerrar menú" onClick={() => setMenu(false)}><X /></button><div className="sidebar-brand"><img src="/logo-jr.jpg" alt="JR Gestión Integral S.A.S." /><span>SAFE ENTER 360<small>JR Gestión Integral</small></span></div><nav aria-label="Navegación principal">{nav.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMenu(false); }}><Icon size={19} /><span>{label}</span></button>)}</nav><div className="sidebar-foot"><div className="sidebar-scope"><ShieldCheck size={18} /><span><strong>Subfase 4.0</strong><small>Integridad de planos</small></span></div><button onClick={onLogout}><LogOut size={18} /> Cerrar sesión</button></div></aside>{menu && <button className="menu-scrim" aria-label="Cerrar menú" onClick={() => setMenu(false)} />}<main className="workspace"><div className="topbar"><button className="menu-button" onClick={() => setMenu(true)} aria-label="Abrir menú"><Menu /></button><span className="mobile-title">{title}</span><div className="user-chip"><CircleUserRound size={21} /><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div></div><div className="content">{content[section]}</div></main></div>;
 }
 
 export default function App() {

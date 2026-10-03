@@ -51,6 +51,10 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
   await app.register(cors, { origin: config.WEB_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] });
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(rateLimit, { max: 180, timeWindow: '1 minute' });
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Cache-Control', 'private, no-store, max-age=0');
+    return payload;
+  });
 
   const registry = new client.Registry();
   client.collectDefaultMetrics({ register: registry, prefix: 'jr_platform_' });
@@ -287,7 +291,7 @@ export async function buildServer(options?: { config?: Config; db?: Database }) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [request.authUser!.organizationId, request.authUser!.id, objectKey, parsed.data.name, parsed.data.contentType, parsed.data.sizeBytes]
     );
-    const uploadUrl = await storage.createUploadUrl(objectKey, parsed.data.contentType);
+    const uploadUrl = await storage.createUploadUrl(objectKey, parsed.data.contentType, parsed.data.sizeBytes);
     await recordAudit(db, request, 'file.upload.request', 'stored_file', result.rows[0].id, { name: parsed.data.name, sizeBytes: parsed.data.sizeBytes });
     return reply.code(201).send({ id: result.rows[0].id, objectKey, uploadUrl, expiresInSeconds: 300 });
   });

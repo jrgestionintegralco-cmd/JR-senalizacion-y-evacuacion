@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Write-Warning "Este procedimiento histórico respalda SOLO PostgreSQL. Para respaldo integral use infra/backup/bundle.mjs (ver docs/SUBFASE_4_0.md)."
 $resolved = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot $OutputDirectory))
 New-Item -ItemType Directory -Path $resolved -Force | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"

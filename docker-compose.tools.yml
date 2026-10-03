@@ -1,0 +1,16 @@
+services:
+  maintenance:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: maintenance
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://jr_app:${POSTGRES_PASSWORD:-change_me}@postgres:5432/jr_platform
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://minio:9000
+    volumes:
+      - ./backups:/backups
+      - ./infra/backup:/app/infra/backup:ro
+      - ./apps/api/tests/integration-stage40.mjs:/app/apps/api/tests/integration-stage40.mjs:ro

@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import type { Database } from './db.js';
 
 export async function recordAudit(
-  db: Database,
+  db: Pick<Database, 'query'>,
   request: FastifyRequest,
   action: string,
   entityType: string,

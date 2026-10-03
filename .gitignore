@@ -7,4 +7,5 @@ coverage/
 .DS_Store
 backups/*.sql.gz
 backups/*.dump
+backups/stage40-*/
 .sites-runtime/

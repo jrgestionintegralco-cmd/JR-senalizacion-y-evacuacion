@@ -4,6 +4,7 @@ import type { Database } from '../db.js';
 import type { createStorage } from '../storage.js';
 import { assertSafeObjectKey } from '../security.js';
 import { recordAudit } from '../audit.js';
+import { PlanFileError } from '../plan-validation.js';
 
 type Storage = ReturnType<typeof createStorage>;
 const nullableText = (max: number) => z.union([z.string().trim().max(max), z.null()]).optional().transform((value) => value || null);
@@ -176,13 +177,16 @@ export async function registerStage3Routes(app: FastifyInstance, db: Database, s
     if (!params.success || !parsed.success) return reply.code(400).send({ error: 'INVALID_INPUT', details: parsed.success ? undefined : parsed.error.flatten() });
     if (parsed.data.sizeBytes > maxUploadBytes) return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'El plano supera el límite configurado.' });
     const organizationId = request.authUser!.organizationId;
-    const floor = await db.query('SELECT id FROM floors WHERE id=$1 AND organization_id=$2 AND status=$3', [params.data.id, organizationId, 'active']);
-    if (!floor.rowCount) return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta no existe o está inactiva.' });
     const safeName = assertSafeObjectKey(parsed.data.name);
-    const objectKey = `${organizationId}/plans/${params.data.id}/${crypto.randomUUID()}/${safeName}`;
+    const objectKey = `${organizationId}/plans/${params.data.id}/staging/${crypto.randomUUID()}/${safeName}`;
     const connection = await db.connect();
     try {
       await connection.query('BEGIN');
+      const floor = await connection.query('SELECT id FROM floors WHERE id=$1 AND organization_id=$2 AND status=$3 FOR UPDATE', [params.data.id, organizationId, 'active']);
+      if (!floor.rowCount) {
+        await connection.query('ROLLBACK');
+        return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta no existe o está inactiva.' });
+      }
       const file = await connection.query<{ id: string }>(
         `INSERT INTO stored_files (organization_id,uploaded_by,object_key,original_name,content_type,size_bytes)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
@@ -193,9 +197,9 @@ export async function registerStage3Routes(app: FastifyInstance, db: Database, s
          SELECT $1,$2,$3,$4,COALESCE(MAX(version),0)+1,$5 FROM floor_plans WHERE organization_id=$1 AND floor_id=$2 RETURNING id,version`,
         [organizationId, params.data.id, file.rows[0].id, parsed.data.title, request.authUser!.id]
       );
+      const uploadUrl = await storage.createUploadUrl(objectKey, parsed.data.contentType, parsed.data.sizeBytes);
+      await recordAudit(connection, request, 'plan.upload.request', 'floor_plan', plan.rows[0].id, { floorId: params.data.id, name: parsed.data.name, version: plan.rows[0].version });
       await connection.query('COMMIT');
-      const uploadUrl = await storage.createUploadUrl(objectKey, parsed.data.contentType);
-      await recordAudit(db, request, 'plan.upload.request', 'floor_plan', plan.rows[0].id, { floorId: params.data.id, name: parsed.data.name, version: plan.rows[0].version });
       return reply.code(201).send({ id: plan.rows[0].id, version: plan.rows[0].version, uploadUrl, expiresInSeconds: 300 });
     } catch (error) {
       await connection.query('ROLLBACK'); throw error;
@@ -205,29 +209,50 @@ export async function registerStage3Routes(app: FastifyInstance, db: Database, s
   app.post('/floor-plans/:id/complete', { preHandler: guard('plans.manage') }, async (request, reply) => {
     const params = idSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: 'INVALID_INPUT' });
-    const plan = await db.query<{ object_key: string; size_bytes: string; content_type: string; floor_id: string }>(
-      `SELECT sf.object_key,sf.size_bytes::text,sf.content_type,fp.floor_id FROM floor_plans fp
+    type PendingPlan = { object_key: string; size_bytes: string; content_type: string; floor_id: string; status: string; version: number };
+    const organizationId = request.authUser!.organizationId;
+    const plan = await db.query<PendingPlan>(
+      `SELECT sf.object_key,sf.size_bytes::text,sf.content_type,fp.floor_id,fp.status,fp.version FROM floor_plans fp
        JOIN stored_files sf ON sf.id=fp.stored_file_id AND sf.organization_id=fp.organization_id
-       WHERE fp.id=$1 AND fp.organization_id=$2 AND fp.status='pending'`,
-      [params.data.id, request.authUser!.organizationId]
+       WHERE fp.id=$1 AND fp.organization_id=$2`,
+      [params.data.id, organizationId]
     );
-    if (!plan.rowCount) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Carga pendiente no encontrada.' });
+    if (!plan.rowCount) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Plano no encontrado.' });
+    const current = plan.rows[0];
+    if (['ready', 'superseded'].includes(current.status)) return { id: params.data.id, status: current.status };
+    if (current.status !== 'pending') return reply.code(409).send({ error: 'PLAN_REJECTED', message: 'Esta carga no está disponible.' });
+    let sealed: { objectKey: string; checksum: string };
     try {
-      const metadata = await storage.getMetadata(plan.rows[0].object_key);
-      if (metadata.sizeBytes !== Number(plan.rows[0].size_bytes)) return reply.code(409).send({ error: 'SIZE_MISMATCH', message: 'El tamaño cargado no coincide con el registrado.' });
-    } catch {
-      return reply.code(409).send({ error: 'UPLOAD_NOT_FOUND', message: 'El archivo aún no aparece en el almacenamiento.' });
+      sealed = await storage.finalizePlan(current.object_key, Number(current.size_bytes), current.content_type, organizationId, current.floor_id);
+    } catch (error) {
+      if (error instanceof PlanFileError) return reply.code(error.statusCode).send({ error: error.code, message: error.message });
+      if ((error as { name?: string }).name === 'NoSuchKey') return reply.code(409).send({ error: 'UPLOAD_NOT_FOUND', message: 'El archivo aún no aparece en el almacenamiento.' });
+      request.log.error({ err: error }, 'Plan verification unavailable');
+      return reply.code(503).send({ error: 'STORAGE_UNAVAILABLE', message: 'No fue posible verificar el archivo. Puedes volver a confirmar la carga.' });
     }
     const connection = await db.connect();
     try {
       await connection.query('BEGIN');
-      await connection.query(`UPDATE floor_plans SET status='superseded' WHERE organization_id=$1 AND floor_id=$2 AND status='ready'`, [request.authUser!.organizationId, plan.rows[0].floor_id]);
-      await connection.query(`UPDATE floor_plans SET status='ready',ready_at=now() WHERE id=$1 AND organization_id=$2`, [params.data.id, request.authUser!.organizationId]);
-      await connection.query(`UPDATE stored_files sf SET status='ready' FROM floor_plans fp WHERE fp.id=$1 AND fp.stored_file_id=sf.id AND sf.organization_id=$2`, [params.data.id, request.authUser!.organizationId]);
+      const floor = await connection.query('SELECT status FROM floors WHERE id=$1 AND organization_id=$2 FOR UPDATE', [current.floor_id, organizationId]);
+      const fresh = await connection.query<{ status: string }>('SELECT status FROM floor_plans WHERE id=$1 AND organization_id=$2 FOR UPDATE', [params.data.id, organizationId]);
+      if (fresh.rows[0]?.status !== 'pending') {
+        await connection.query('ROLLBACK');
+        if (['ready', 'superseded'].includes(fresh.rows[0]?.status)) return { id: params.data.id, status: fresh.rows[0].status };
+        return reply.code(409).send({ error: 'PLAN_UNAVAILABLE' });
+      }
+      if (floor.rows[0]?.status !== 'active') {
+        await connection.query('ROLLBACK');
+        return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta está inactiva.' });
+      }
+      const newer = await connection.query("SELECT id FROM floor_plans WHERE organization_id=$1 AND floor_id=$2 AND version>$3 AND status IN ('ready','superseded') LIMIT 1", [organizationId, current.floor_id, current.version]);
+      const status = newer.rowCount ? 'superseded' : 'ready';
+      if (status === 'ready') await connection.query(`UPDATE floor_plans SET status='superseded' WHERE organization_id=$1 AND floor_id=$2 AND status='ready'`, [organizationId, current.floor_id]);
+      await connection.query(`UPDATE floor_plans SET status=$3,ready_at=now() WHERE id=$1 AND organization_id=$2`, [params.data.id, organizationId, status]);
+      await connection.query(`UPDATE stored_files sf SET status='ready',object_key=$3,checksum_sha256=$4,verified_at=now() FROM floor_plans fp WHERE fp.id=$1 AND fp.organization_id=$2 AND fp.stored_file_id=sf.id AND sf.organization_id=$2`, [params.data.id, organizationId, sealed.objectKey, sealed.checksum]);
+      await recordAudit(connection, request, 'plan.upload.complete', 'floor_plan', params.data.id, { version: current.version, status, checksumSha256: sealed.checksum });
       await connection.query('COMMIT');
+      return { id: params.data.id, status };
     } catch (error) { await connection.query('ROLLBACK'); throw error; } finally { connection.release(); }
-    await recordAudit(db, request, 'plan.upload.complete', 'floor_plan', params.data.id);
-    return { id: params.data.id, status: 'ready' };
   });
 
   app.get('/floor-plans/:id/download', { preHandler: guard('plans.read') }, async (request, reply) => {

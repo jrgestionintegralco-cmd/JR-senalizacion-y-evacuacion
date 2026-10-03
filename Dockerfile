@@ -17,6 +17,13 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 EXPOSE 4000
 CMD ["node", "apps/api/dist/server.js"]
 
+FROM api AS maintenance
+RUN apk add --no-cache postgresql16-client
+COPY infra/db /app/infra/db
+COPY infra/backup /app/infra/backup
+COPY apps/api/tests/integration-stage40.mjs /app/apps/api/tests/integration-stage40.mjs
+CMD ["node", "infra/backup/bundle.mjs"]
+
 FROM nginx:1.27-alpine AS web
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY infra/nginx.conf /etc/nginx/conf.d/default.conf
