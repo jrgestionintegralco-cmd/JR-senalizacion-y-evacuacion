@@ -4,11 +4,10 @@ import pg from 'pg';
 import { z } from 'zod';
 import { hashPassword, normalizeEmail } from '../../apps/api/dist/security.js';
 import { bootstrapDatabaseTarget, bootstrapDatabaseDiagnostic } from './bootstrap-database.mjs';
+import { validateBootstrapAuthorization, bootstrapAuthorizationDiagnostic } from './bootstrap-authorization.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
-const DATABASE = 'safe_enter_render_staging';
 const ACTION = 'staging.bootstrap_admin.completed';
-const CONFIRMATION = 'CREATE_FIRST_JR_RENDER_STAGING_ADMIN';
 const REQUIRED_PERMISSIONS = [
   'platform.dashboard.read', 'users.read', 'users.manage', 'roles.read',
   'roles.manage', 'audit.read', 'settings.read', 'settings.manage',
@@ -22,16 +21,7 @@ let client;
 let transaction = false;
 let stage = 'authorization';
 try {
-  if (process.argv.length !== 3 || process.argv[2] !== '--execute-once' ||
-      process.env.RENDER !== 'true' ||
-      process.env.CONFIRM_RENDER_STAGING !== DATABASE ||
-      process.env.STAGING_BOOTSTRAP_CONFIRM !== CONFIRMATION) {
-    throw new Error('Explicit staging authorization required');
-  }
-  const origin = new URL(process.env.RENDER_EXTERNAL_URL ?? '');
-  if (origin.protocol !== 'https:' || !origin.hostname.endsWith('.onrender.com')) {
-    throw new Error('Render service context required');
-  }
+  validateBootstrapAuthorization(process.argv, process.env);
   stage = 'database URL parsing';
   const target = bootstrapDatabaseTarget(process.env.DATABASE_URL);
   stage = 'staging identity validation';
@@ -122,7 +112,9 @@ try {
   if (transaction && client) {
     try { await client.query('ROLLBACK'); } catch { /* Never reveal driver errors. */ }
   }
-  console.error(`Bootstrap stopped at ${stage}; diagnostic=${bootstrapDatabaseDiagnostic(error)}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
+  const diagnostic = stage === 'authorization'
+    ? bootstrapAuthorizationDiagnostic(error) : bootstrapDatabaseDiagnostic(error);
+  console.error(`Bootstrap stopped at ${stage}; diagnostic=${diagnostic}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
   process.exitCode = 1;
 } finally {
   delete process.env.STAGING_BOOTSTRAP_PASSWORD;
