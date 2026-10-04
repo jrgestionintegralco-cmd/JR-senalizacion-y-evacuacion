@@ -3,6 +3,7 @@
 import pg from 'pg';
 import { z } from 'zod';
 import { hashPassword, normalizeEmail } from '../../apps/api/dist/security.js';
+import { bootstrapDatabaseTarget } from './bootstrap-database.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
 const DATABASE = 'safe_enter_render_staging';
@@ -31,11 +32,7 @@ try {
   if (origin.protocol !== 'https:' || !origin.hostname.endsWith('.onrender.com')) {
     throw new Error('Render service context required');
   }
-  const url = new URL(process.env.DATABASE_URL ?? '');
-  if (!['postgres:', 'postgresql:'].includes(url.protocol) ||
-      decodeURIComponent(url.pathname) !== `/${DATABASE}`) {
-    throw new Error('Unexpected database target');
-  }
+  const target = bootstrapDatabaseTarget(process.env.DATABASE_URL);
   const email = normalizeEmail(process.env.STAGING_BOOTSTRAP_EMAIL ?? '');
   let password = process.env.STAGING_BOOTSTRAP_PASSWORD ?? '';
   if (!z.email().safeParse(email).success || password.length < 12 || password.length > 128) {
@@ -46,7 +43,7 @@ try {
   delete process.env.STAGING_BOOTSTRAP_PASSWORD;
 
   stage = 'database connection';
-  client = new pg.Client({ connectionString: url.href, connectionTimeoutMillis: 5000 });
+  client = new pg.Client({ connectionString: target.connectionString, connectionTimeoutMillis: 5000 });
   // Use the service's existing INTERNAL URL. Never weaken TLS verification.
   await client.connect();
   client.on('error', () => {}); // Never log raw driver errors or connection details.
@@ -61,7 +58,7 @@ try {
   await client.query(`LOCK TABLE organizations, roles, permissions, role_permissions,
     users, user_roles, audit_events IN SHARE ROW EXCLUSIVE MODE`);
   const identity = await client.query('SELECT current_database() AS name');
-  if (identity.rows[0]?.name !== DATABASE) throw new Error('Unexpected database');
+  if (identity.rows[0]?.name !== target.database) throw new Error('Unexpected database');
 
   stage = 'one-time check';
   const marker = await client.query('SELECT 1 FROM audit_events WHERE action = $1 LIMIT 1', [ACTION]);
