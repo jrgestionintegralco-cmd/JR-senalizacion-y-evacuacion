@@ -1,9 +1,16 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { runAuthorizedBootstrap } from './bootstrap-startup.mjs';
 const port = process.env.PORT ?? '10000';
 if (!/^\d+$/.test(port) || +port < 1 || +port > 65535 || +port === 4000) throw new Error('Invalid public PORT');
 const origin = process.env.WEB_ORIGIN || process.env.RENDER_EXTERNAL_URL;
 if (!origin || !origin.startsWith('https://')) throw new Error('An exact HTTPS WEB_ORIGIN or RENDER_EXTERNAL_URL is required');
+try {
+  await runAuthorizedBootstrap();
+} catch (error) {
+  console.error(error.message); // Helper errors contain no environment values.
+  process.exit(1);
+}
 writeFileSync('/etc/nginx/conf.d/default.conf', readFileSync(new URL('./nginx.conf.template', import.meta.url), 'utf8').replaceAll('${PORT}', port));
 const children = [
   spawn(process.execPath, ['apps/api/dist/server.js'], { stdio: 'inherit', env: { ...process.env, API_PORT: '4000', WEB_ORIGIN: origin, COOKIE_SECURE: 'true' } }),
