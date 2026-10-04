@@ -5,6 +5,7 @@ import { hashPassword, normalizeEmail } from '../../apps/api/dist/security.js';
 import { bootstrapDatabaseTarget, bootstrapDatabaseDiagnostic } from './bootstrap-database.mjs';
 import { validateBootstrapAuthorization, bootstrapAuthorizationDiagnostic } from './bootstrap-authorization.mjs';
 import { validateBootstrapIdentity, hashBootstrapIdentity, bootstrapIdentityDiagnostic } from './bootstrap-identity.mjs';
+import { transactionDiagnostic, transactionDatabaseMismatch, rollbackStatus } from './bootstrap-transaction.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
 const ACTION = 'staging.bootstrap_admin.completed';
@@ -19,6 +20,7 @@ const REQUIRED_PERMISSIONS = [
 
 let client;
 let transaction = false;
+let transactionStep;
 let stage = 'authorization';
 try {
   validateBootstrapAuthorization(process.argv, process.env);
@@ -38,17 +40,26 @@ try {
   await client.connect();
   client.on('error', () => {}); // Never log raw driver errors or connection details.
   stage = 'transaction';
+  transactionStep = 'BEGIN';
   await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+  transactionStep = 'ACTIVE_FLAG';
   transaction = true;
+  transactionStep = 'SET_LOCK_TIMEOUT';
   await client.query("SET LOCAL lock_timeout = '5s'");
+  transactionStep = 'SET_STATEMENT_TIMEOUT';
   await client.query("SET LOCAL statement_timeout = '15s'");
+  transactionStep = 'SET_IDLE_TIMEOUT';
   await client.query("SET LOCAL idle_in_transaction_session_timeout = '20s'");
+  transactionStep = 'ADVISORY_LOCK';
   await client.query('SELECT pg_advisory_xact_lock(764031902)');
   // Prevent concurrent inserts/updates bypassing the bootstrap advisory lock.
+  transactionStep = 'TABLE_LOCK';
   await client.query(`LOCK TABLE organizations, roles, permissions, role_permissions,
     users, user_roles, audit_events IN SHARE ROW EXCLUSIVE MODE`);
+  transactionStep = 'CURRENT_DATABASE';
   const identity = await client.query('SELECT current_database() AS name');
-  if (identity.rows[0]?.name !== target.database) throw new Error('Unexpected database');
+  transactionStep = 'DATABASE_MATCH';
+  if (identity.rows[0]?.name !== target.database) throw transactionDatabaseMismatch();
 
   stage = 'one-time check';
   const marker = await client.query('SELECT 1 FROM audit_events WHERE action = $1 LIMIT 1', [ACTION]);
@@ -107,14 +118,23 @@ try {
   transaction = false;
   console.log('Staging administrator created; one-time bootstrap consumed. Remove temporary bootstrap variables.');
 } catch (error) {
+  let rollbackAttempted = false;
+  let rollbackFailed = false;
   if (transaction && client) {
-    try { await client.query('ROLLBACK'); } catch { /* Never reveal driver errors. */ }
+    rollbackAttempted = true;
+    try { await client.query('ROLLBACK'); } catch (rollbackError) {
+      rollbackFailed = true;
+      if (stage === 'transaction') console.error(`Bootstrap rollback; ${transactionDiagnostic('ROLLBACK', rollbackError)}`);
+    }
   }
   const diagnostic = stage === 'authorization'
     ? bootstrapAuthorizationDiagnostic(error)
     : stage === 'staging identity validation'
       ? bootstrapIdentityDiagnostic(error) : bootstrapDatabaseDiagnostic(error);
-  console.error(`Bootstrap stopped at ${stage}; diagnostic=${diagnostic}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
+  const details = stage === 'transaction'
+    ? `${transactionDiagnostic(transactionStep, error)}; rollback=${rollbackStatus(transaction, rollbackAttempted, rollbackFailed)}`
+    : `diagnostic=${diagnostic}`;
+  console.error(`Bootstrap stopped at ${stage}; ${details}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
   process.exitCode = 1;
 } finally {
   delete process.env.STAGING_BOOTSTRAP_PASSWORD;
