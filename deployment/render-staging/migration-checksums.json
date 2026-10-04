@@ -1,0 +1,6 @@
+{
+  "001_platform.sql": "7f0efe77c9feed84bcf06f0b8c623299c57d6adbbde1e4be198d283466bfa90e",
+  "002_stage2.sql": "ebea0a4ff579739203192e9b6005202f16e9908a430dbd594d7d6d8ae35e5548",
+  "003_stage3.sql": "d9b33bf43abdfd9bf09e3b2c5120f184f88396681d417f5fd7f9b40a9e1dfda3",
+  "004_stage40.sql": "458306eff891dea6c819f12ac16ca675e929b46b9b22c3ecac36324cbc3ede5d"
+}

@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: safe-enter-render-staging
+    runtime: docker
+    plan: free
+    autoDeploy: false
+    dockerfilePath: ./deployment/render-staging/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health/live
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: safe-enter-render-staging-db
+          property: connectionString
+      - key: S3_ENDPOINT
+        value: http://127.0.0.1:9
+      - key: S3_PUBLIC_ENDPOINT
+        value: http://127.0.0.1:9
+      - key: S3_REGION
+        value: us-east-1
+      - key: S3_BUCKET
+        value: staging-storage-disabled
+      - key: S3_ACCESS_KEY
+        value: storage-disabled
+      - key: S3_SECRET_KEY
+        value: storage-disabled-not-a-real-secret
+      - key: S3_FORCE_PATH_STYLE
+        value: 'true'
+      - key: SESSION_TTL_HOURS
+        value: '8'
+databases:
+  - name: safe-enter-render-staging-db
+    plan: free
+    databaseName: safe_enter_render_staging
+    user: staging_app
+    postgresMajorVersion: '16'
