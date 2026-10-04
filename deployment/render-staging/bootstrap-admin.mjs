@@ -1,10 +1,10 @@
 // One-time Render STAGING bootstrap, invoked only by explicitly authorized startup.
 // Run only after separate authorization; do not pass credentials on the CLI.
 import pg from 'pg';
-import { z } from 'zod';
 import { hashPassword, normalizeEmail } from '../../apps/api/dist/security.js';
 import { bootstrapDatabaseTarget, bootstrapDatabaseDiagnostic } from './bootstrap-database.mjs';
 import { validateBootstrapAuthorization, bootstrapAuthorizationDiagnostic } from './bootstrap-authorization.mjs';
+import { validateBootstrapIdentity, hashBootstrapIdentity, bootstrapIdentityDiagnostic } from './bootstrap-identity.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
 const ACTION = 'staging.bootstrap_admin.completed';
@@ -27,10 +27,8 @@ try {
   stage = 'staging identity validation';
   const email = normalizeEmail(process.env.STAGING_BOOTSTRAP_EMAIL ?? '');
   let password = process.env.STAGING_BOOTSTRAP_PASSWORD ?? '';
-  if (!z.email().safeParse(email).success || password.length < 12 || password.length > 128) {
-    throw new Error('Invalid staging identity');
-  }
-  const passwordHash = await hashPassword(password);
+  validateBootstrapIdentity(email, password);
+  const passwordHash = await hashBootstrapIdentity(password, hashPassword);
   password = '';
   delete process.env.STAGING_BOOTSTRAP_PASSWORD;
 
@@ -113,7 +111,9 @@ try {
     try { await client.query('ROLLBACK'); } catch { /* Never reveal driver errors. */ }
   }
   const diagnostic = stage === 'authorization'
-    ? bootstrapAuthorizationDiagnostic(error) : bootstrapDatabaseDiagnostic(error);
+    ? bootstrapAuthorizationDiagnostic(error)
+    : stage === 'staging identity validation'
+      ? bootstrapIdentityDiagnostic(error) : bootstrapDatabaseDiagnostic(error);
   console.error(`Bootstrap stopped at ${stage}; diagnostic=${diagnostic}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
   process.exitCode = 1;
 } finally {
