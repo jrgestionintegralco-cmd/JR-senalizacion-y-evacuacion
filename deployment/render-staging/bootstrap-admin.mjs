@@ -3,7 +3,7 @@
 import pg from 'pg';
 import { z } from 'zod';
 import { hashPassword, normalizeEmail } from '../../apps/api/dist/security.js';
-import { bootstrapDatabaseTarget } from './bootstrap-database.mjs';
+import { bootstrapDatabaseTarget, bootstrapDatabaseDiagnostic } from './bootstrap-database.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
 const DATABASE = 'safe_enter_render_staging';
@@ -32,7 +32,9 @@ try {
   if (origin.protocol !== 'https:' || !origin.hostname.endsWith('.onrender.com')) {
     throw new Error('Render service context required');
   }
+  stage = 'database URL parsing';
   const target = bootstrapDatabaseTarget(process.env.DATABASE_URL);
+  stage = 'staging identity validation';
   const email = normalizeEmail(process.env.STAGING_BOOTSTRAP_EMAIL ?? '');
   let password = process.env.STAGING_BOOTSTRAP_PASSWORD ?? '';
   if (!z.email().safeParse(email).success || password.length < 12 || password.length > 128) {
@@ -116,11 +118,11 @@ try {
   await client.query('COMMIT');
   transaction = false;
   console.log('Staging administrator created; one-time bootstrap consumed. Remove temporary bootstrap variables.');
-} catch {
+} catch (error) {
   if (transaction && client) {
     try { await client.query('ROLLBACK'); } catch { /* Never reveal driver errors. */ }
   }
-  console.error(`Bootstrap stopped at ${stage}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
+  console.error(`Bootstrap stopped at ${stage}; diagnostic=${bootstrapDatabaseDiagnostic(error)}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
   process.exitCode = 1;
 } finally {
   delete process.env.STAGING_BOOTSTRAP_PASSWORD;
