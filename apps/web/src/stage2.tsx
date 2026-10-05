@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, MapPin, Pencil, Plus, Search, X } from 'lucide-react';
 import { api } from './api';
+import { saveProjectAndReload } from './project-save';
 
 export type Client = {
   id: string; legalName: string; tradeName: string | null; documentType: string; documentNumber: string;
@@ -129,8 +130,18 @@ export function ProjectsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const payload = { clientId: formClientId, establishmentId: formEstablishmentId, code: text(data, 'code'), name: text(data, 'name'), description: optional(data, 'description'), startsOn: optional(data, 'startsOn'), dueOn: optional(data, 'dueOn') };
-    try { await api(selected ? `/projects/${selected.id}` : '/projects', { method: selected ? 'PUT' : 'POST', body: JSON.stringify(payload) }); setSelected(undefined); setMessage(selected ? 'Proyecto actualizado.' : 'Proyecto creado.'); await load(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'No fue posible guardar el proyecto.'); }
+    const result = await saveProjectAndReload(
+      () => api(selected ? `/projects/${selected.id}` : '/projects', { method: selected ? 'PUT' : 'POST', body: JSON.stringify(payload) }), load
+    );
+    if (!result.saved) {
+      setMessage(result.error instanceof Error ? result.error.message : 'No fue posible guardar el proyecto.');
+      return;
+    }
+    setSelected(undefined);
+    const success = selected ? 'Proyecto actualizado.' : 'Proyecto creado.';
+    setMessage(result.reloadError
+      ? `${success} No se pudo actualizar la lista. ${result.reloadError instanceof Error ? result.reloadError.message : 'Vuelve a cargar la página para verlo.'}`
+      : success);
   }
   async function changeStatus(item: Project, status: ProjectStatus) {
     try { await api(`/projects/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); await load(); }
