@@ -6,6 +6,7 @@ import { bootstrapDatabaseTarget, bootstrapDatabaseDiagnostic } from './bootstra
 import { validateBootstrapAuthorization, bootstrapAuthorizationDiagnostic } from './bootstrap-authorization.mjs';
 import { validateBootstrapIdentity, hashBootstrapIdentity, bootstrapIdentityDiagnostic } from './bootstrap-identity.mjs';
 import { transactionDiagnostic, transactionDatabaseMismatch, rollbackStatus } from './bootstrap-transaction.mjs';
+import { prepareBootstrapPreconditions } from './bootstrap-preconditions.mjs';
 
 const ORGANIZATION = 'JR Gestión Integral S.A.S.';
 const ACTION = 'staging.bootstrap_admin.completed';
@@ -39,6 +40,8 @@ try {
   // Use the service's existing INTERNAL URL. Never weaken TLS verification.
   await client.connect();
   client.on('error', () => {}); // Never log raw driver errors or connection details.
+  stage = 'staging preconditions';
+  await prepareBootstrapPreconditions(client);
   stage = 'transaction';
   transactionStep = 'BEGIN';
   await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
@@ -131,7 +134,10 @@ try {
     ? bootstrapAuthorizationDiagnostic(error)
     : stage === 'staging identity validation'
       ? bootstrapIdentityDiagnostic(error) : bootstrapDatabaseDiagnostic(error);
-  const details = stage === 'transaction'
+  const preconditionsCodes = new Set(['PRECONDITIONS_FAILED_ROLLBACK_UNCONFIRMED', 'PRECONDITIONS_FAILED_ROLLBACK_COMPLETED']);
+  const details = stage === 'staging preconditions'
+    ? `diagnostic=${preconditionsCodes.has(error?.message) ? error.message : 'PRECONDITIONS_PREPARATION_FAILED'}`
+    : stage === 'transaction'
     ? `${transactionDiagnostic(transactionStep, error)}; rollback=${rollbackStatus(transaction, rollbackAttempted, rollbackFailed)}`
     : `diagnostic=${diagnostic}`;
   console.error(`Bootstrap stopped at ${stage}; ${details}; no retry or overwrite performed. Inspect database state before retrying if commit outcome is uncertain.`);
