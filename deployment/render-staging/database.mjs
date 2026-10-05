@@ -6,7 +6,11 @@ const url = new URL(process.env.DATABASE_URL ?? '');
 if (url.pathname !== '/safe_enter_render_staging' || process.env.CONFIRM_RENDER_STAGING !== 'safe_enter_render_staging') throw new Error('Only explicitly confirmed, isolated Render staging database is allowed');
 const mode = process.argv[2];
 if (!['schema', 'reviewer'].includes(mode)) throw new Error('Use schema or reviewer; never run automatically at startup');
-const client = new pg.Client({ connectionString: url.href });
+const client = new pg.Client({ connectionString: url.href, ssl: { rejectUnauthorized: true } });
+// pg may let URL SSL options override the explicit configuration. Fail closed.
+if (!client.connectionParameters.ssl || client.connectionParameters.ssl.rejectUnauthorized === false) {
+  throw new Error('Staging initialization requires TLS with certificate verification');
+}
 await client.connect();
 try {
   await client.query('BEGIN');
