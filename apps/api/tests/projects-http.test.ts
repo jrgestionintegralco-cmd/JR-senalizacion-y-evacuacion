@@ -47,3 +47,16 @@ it('POST explains unavailable relationships without attempting audit', async () 
     expect(query).toHaveBeenCalledTimes(1);
   } finally { await app.close(); }
 });
+
+it('POST validates TEST-001 while rejecting a typographic hyphen without weakening the API pattern', async () => {
+  const query = vi.fn().mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'project-id' }] }).mockResolvedValueOnce({ rows: [] });
+  const app = await setup(query);
+  try {
+    expect((await app.inject({ method: 'POST', url: '/projects', payload: { ...payload, code: 'TEST-001' } })).statusCode).toBe(201);
+    query.mockClear();
+    const invalid = await app.inject({ method: 'POST', url: '/projects', payload: { ...payload, code: 'TEST\u2011001' } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: 'INVALID_INPUT', details: { fieldErrors: { code: [expect.any(String)] } } });
+    expect(query).not.toHaveBeenCalled();
+  } finally { await app.close(); }
+});
