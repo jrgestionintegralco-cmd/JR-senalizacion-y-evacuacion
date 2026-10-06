@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, MapPin, Pencil, Plus, Search, X } from 'lucide-react';
 import { api } from './api';
 import { saveProjectAndReload } from './project-save';
-import { normalizeProjectCode, projectCodeForSubmission, projectCodeInputPattern } from './project-code';
+import { projectCodeForSubmission } from './project-code';
+import { ProjectCodeInput } from './project-code-input';
 
 export type Client = {
   id: string; legalName: string; tradeName: string | null; documentType: string; documentNumber: string;
@@ -162,7 +163,7 @@ export function ProjectsPage() {
     {selected !== undefined && <div className="modal-backdrop"><section className="modal wide-modal" role="dialog" aria-modal="true"><button className="icon-button close" onClick={() => setSelected(undefined)} aria-label="Cerrar"><X /></button><p className="eyebrow">Etapa 2</p><h3>{selected ? 'Editar proyecto' : 'Nuevo proyecto'}</h3><form className="entity-form" onSubmit={save}>
       <label>Cliente<select value={formClientId} onChange={(event) => changeClient(event.target.value)} required><option value="" disabled>Seleccionar cliente</option>{clients.filter((client) => client.status === 'active' || client.id === selected?.clientId).map((client) => <option value={client.id} key={client.id}>{client.legalName}</option>)}</select></label>
       <label>Establecimiento<select value={formEstablishmentId} onChange={(event) => setFormEstablishmentId(event.target.value)} required><option value="" disabled>Seleccionar establecimiento</option>{availableEstablishments.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-      <label>Código<input name="code" value={formCode} onChange={(event) => setFormCode(normalizeProjectCode(event.target.value))} required minLength={2} maxLength={40} pattern={projectCodeInputPattern} /></label><label>Nombre<input name="name" defaultValue={selected?.name} required /></label>
+      <label>Código<ProjectCodeInput value={formCode} onChange={setFormCode} /></label><label>Nombre<input name="name" defaultValue={selected?.name} required /></label>
       <label>Fecha de inicio<input name="startsOn" type="date" defaultValue={selected?.startsOn ?? ''} /></label><label>Fecha límite<input name="dueOn" type="date" defaultValue={selected?.dueOn ?? ''} /></label>
       <label className="full">Descripción<textarea name="description" defaultValue={selected?.description ?? ''} maxLength={1000} /></label>
       <div className="modal-actions full"><button type="button" className="secondary" onClick={() => setSelected(undefined)}>Cancelar</button><button className="primary" disabled={!formClientId || !formEstablishmentId}>Guardar proyecto</button></div>

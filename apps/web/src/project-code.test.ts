@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { normalizeProjectCode, projectCodeForSubmission, projectCodeInputPattern } from './project-code';
+import { normalizeProjectCode, projectCodeForSubmission, projectCodeValidationMessage } from './project-code';
 
 it('preserva exactamente TEST-001 en el payload JSON enviado a la API', () => {
   expect(JSON.parse(JSON.stringify({ code: projectCodeForSubmission('TEST-001') }))).toEqual({ code: 'TEST-001' });
@@ -17,8 +17,7 @@ it('conserva los caracteres válidos y rechaza espacios internos, invisibles, s�
     expect(() => projectCodeForSubmission(code)).toThrow('Código:');
   }
 });
-it('el patrón HTML escapa el guion y acepta TEST-001 con la semántica v del navegador', () => {
-  const pattern = new RegExp(`^(?:${projectCodeInputPattern})$`, 'v');
-  expect(pattern.test('TEST-001')).toBe(true);
-  expect(pattern.test('TEST/001')).toBe(false);
+it('acepta TEST-001 y mantiene el rechazo de códigos inválidos antes del envío', () => {
+  expect(projectCodeValidationMessage('TEST-001')).toBe('');
+  expect(projectCodeValidationMessage('TEST/001')).toMatch(/^Código:/);
 });
