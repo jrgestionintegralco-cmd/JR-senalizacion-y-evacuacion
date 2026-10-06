@@ -21,3 +21,10 @@ it('acepta TEST-001 y mantiene el rechazo de códigos inválidos antes del enví
   expect(projectCodeValidationMessage('TEST-001')).toBe('');
   expect(projectCodeValidationMessage('TEST/001')).toMatch(/^Código:/);
 });
+
+it.each(['TEST-001', 'JR-001', 'PROY-2026-01', 'OBRA_001', 'CLIENTE-25', 'BARRANQUILLA.001', 'PROY.2026'])(
+  'la regla de negocio acepta exactamente %s', (code) => {
+    expect(projectCodeValidationMessage(code)).toBe('');
+    expect(projectCodeForSubmission(code)).toBe(code);
+  }
+);

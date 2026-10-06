@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from './api';
 import { saveProjectAndReload } from './project-save';
+import { projectCodeFromForm } from './project-code';
 afterEach(() => vi.unstubAllGlobals());
 const payload = {
   clientId: '11111111-1111-4111-8111-111111111111', establishmentId: '22222222-2222-4222-8222-222222222222',
@@ -36,3 +37,20 @@ it('un fallo de recarga conserva el éxito de creación y no repite POST', async
   if (result.saved) expect(result.reloadError).toMatchObject({ message: 'Lista temporalmente no disponible' });
   expect(fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
 });
+
+it.each(['TEST-001', 'JR-001', 'OBRA_001', 'PROY.2026'])(
+  'envía %s desde el formulario a POST /api/projects y recarga tras el éxito', async (code) => {
+    const data = new FormData(); data.set('code', code);
+    const fetch = vi.fn().mockResolvedValue(new Response('{"id":"synthetic-project"}', { status: 201 }));
+    vi.stubGlobal('fetch', fetch);
+    const reload = vi.fn().mockResolvedValue(undefined);
+    const result = await saveProjectAndReload(
+      () => api('/projects', { method: 'POST', body: JSON.stringify({ ...payload, code: projectCodeFromForm(data) }) }), reload
+    );
+    expect(result).toEqual({ saved: true });
+    expect(fetch.mock.calls[0][0]).toBe('/api/projects');
+    expect(fetch.mock.calls[0][1].method).toBe('POST');
+    expect(JSON.parse(fetch.mock.calls[0][1].body).code).toBe(code);
+    expect(reload).toHaveBeenCalledOnce();
+  }
+);

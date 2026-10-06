@@ -8,7 +8,7 @@ export function normalizeProjectCode(value: string): string {
 
 export function projectCodeValidationMessage(value: string): string {
   return projectCodePattern.test(normalizeProjectCode(value)) ? ''
-    : 'Código: utiliza entre 2 y 40 letras sin tildes, números, puntos, guiones (-) o guiones bajos (_).';
+    : 'Código: utiliza de 2 a 40 caracteres: letras A–Z/a–z, números 0–9, punto (.), guion (-) y guion bajo (_).';
 }
 
 export function projectCodeForSubmission(value: string): string {
@@ -16,4 +16,9 @@ export function projectCodeForSubmission(value: string): string {
   const message = projectCodeValidationMessage(code);
   if (message) throw new Error(message);
   return code;
+}
+
+// Read the actual submitted control, including values filled by the browser.
+export function projectCodeFromForm(data: FormData): string {
+  return projectCodeForSubmission(String(data.get('code') ?? ''));
 }

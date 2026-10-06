@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, MapPin, Pencil, Plus, Search, X } from 'lucide-react';
 import { api } from './api';
 import { saveProjectAndReload } from './project-save';
-import { projectCodeForSubmission } from './project-code';
+import { projectCodeFromForm } from './project-code';
 import { ProjectCodeInput } from './project-code-input';
 
 export type Client = {
@@ -133,7 +133,7 @@ export function ProjectsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     let code: string;
-    try { code = projectCodeForSubmission(formCode); }
+    try { code = projectCodeFromForm(data); }
     catch (error) { setMessage((error as Error).message); return; }
     const payload = { clientId: formClientId, establishmentId: formEstablishmentId, code, name: text(data, 'name'), description: optional(data, 'description'), startsOn: optional(data, 'startsOn'), dueOn: optional(data, 'dueOn') };
     const result = await saveProjectAndReload(
