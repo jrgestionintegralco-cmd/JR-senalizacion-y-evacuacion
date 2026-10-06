@@ -60,14 +60,14 @@ No free-service SSH/shell or paid predeploy command is assumed.
 
 ## Storage scope
 
-Existing storage clients initialize lazily: login, readiness, session, dashboard
-and administrative navigation do not call MinIO. Required S3 config points to
-unavailable loopback port 9 with visibly dummy credentials. No replacement
-storage or public MinIO is introduced. File upload/download, confirmation,
-plan content/validation and object backup/restore are excluded from acceptance.
-Some upload-link requests can create pending metadata before the upload fails;
-reviewers must avoid all file actions. The application UI is not modified to
-hide them. No existing object or stored-file metadata is imported.
+Storage remains MinIO/S3, with a private bucket and signed upload/download URLs.
+Configure the existing S3 variables as described in [STORAGE.md](STORAGE.md).
+Loopback placeholders are no longer included in the Blueprint. Existing Render
+services must update their environment manually; editing this file does not
+provision MinIO or change saved Render variables. Login/navigation remain independent
+of storage availability. Upload authorization checks storage before proceeding;
+no new file/version rows are recorded until transferred bytes are verified.
+Existing pending versions and objects are not automatically changed or removed.
 
 ## Free tier: conditional, disposable, not durable storage
 

@@ -177,38 +177,77 @@ export async function registerStage3Routes(app: FastifyInstance, db: Database, s
     if (!params.success || !parsed.success) return reply.code(400).send({ error: 'INVALID_INPUT', details: parsed.success ? undefined : parsed.error.flatten() });
     if (parsed.data.sizeBytes > maxUploadBytes) return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'El plano supera el límite configurado.' });
     const organizationId = request.authUser!.organizationId;
-    const safeName = assertSafeObjectKey(parsed.data.name);
-    const objectKey = `${organizationId}/plans/${params.data.id}/staging/${crypto.randomUUID()}/${safeName}`;
-    const connection = await db.connect();
     try {
-      await connection.query('BEGIN');
-      const floor = await connection.query('SELECT id FROM floors WHERE id=$1 AND organization_id=$2 AND status=$3 FOR UPDATE', [params.data.id, organizationId, 'active']);
-      if (!floor.rowCount) {
-        await connection.query('ROLLBACK');
-        return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta no existe o está inactiva.' });
-      }
-      const file = await connection.query<{ id: string }>(
-        `INSERT INTO stored_files (organization_id,uploaded_by,object_key,original_name,content_type,size_bytes)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [organizationId, request.authUser!.id, objectKey, parsed.data.name, parsed.data.contentType, parsed.data.sizeBytes]
-      );
-      const plan = await connection.query<{ id: string; version: number }>(
-        `INSERT INTO floor_plans (organization_id,floor_id,stored_file_id,title,version,uploaded_by)
-         SELECT $1,$2,$3,$4,COALESCE(MAX(version),0)+1,$5 FROM floor_plans WHERE organization_id=$1 AND floor_id=$2 RETURNING id,version`,
-        [organizationId, params.data.id, file.rows[0].id, parsed.data.title, request.authUser!.id]
-      );
-      const uploadUrl = await storage.createUploadUrl(objectKey, parsed.data.contentType, parsed.data.sizeBytes);
-      await recordAudit(connection, request, 'plan.upload.request', 'floor_plan', plan.rows[0].id, { floorId: params.data.id, name: parsed.data.name, version: plan.rows[0].version });
-      await connection.query('COMMIT');
-      return reply.code(201).send({ id: plan.rows[0].id, version: plan.rows[0].version, uploadUrl, expiresInSeconds: 300 });
+      await storage.ensurePlanStorageAvailable();
+      const floor = await db.query('SELECT id FROM floors WHERE id=$1 AND organization_id=$2 AND status=$3', [params.data.id, organizationId, 'active']);
+      if (!floor.rowCount) return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta no existe o está inactiva.' });
+      const id = crypto.randomUUID();
+      const intent = {
+        ...parsed.data, id, organizationId, userId: request.authUser!.id, floorId: params.data.id,
+        objectKey: `${organizationId}/plans/${params.data.id}/staging/${id}/${assertSafeObjectKey(parsed.data.name)}`,
+        expiresAt: Date.now() + 15 * 60_000
+      };
+      const uploadUrl = await storage.createUploadUrl(intent.objectKey, intent.contentType, intent.sizeBytes);
+      // No version/file/audit rows are written until the bytes are uploaded and verified.
+      return reply.code(201).send({ id, uploadToken: storage.signPlanUploadIntent(intent), uploadUrl, expiresInSeconds: 300 });
     } catch (error) {
-      await connection.query('ROLLBACK'); throw error;
-    } finally { connection.release(); }
+      if (error instanceof PlanFileError) return reply.code(error.statusCode).send({ error: error.code, message: error.message });
+      return reply.code(503).send({ error: 'STORAGE_UNAVAILABLE', message: 'No fue posible preparar la carga. No se creó ninguna versión.' });
+    }
   });
 
   app.post('/floor-plans/:id/complete', { preHandler: guard('plans.manage') }, async (request, reply) => {
     const params = idSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: 'INVALID_INPUT' });
+    if (request.body !== undefined && request.body !== null) {
+      const body = z.object({ uploadToken: z.string().min(1).max(8192) }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: 'INVALID_INPUT' });
+      try {
+        const intent = storage.verifyPlanUploadIntent(body.data.uploadToken);
+        if (intent.id !== params.data.id || intent.organizationId !== request.authUser!.organizationId ||
+            intent.userId !== request.authUser!.id || intent.sizeBytes > maxUploadBytes) {
+          return reply.code(403).send({ error: 'UPLOAD_NOT_AUTHORIZED', message: 'Esta autorización no corresponde a la carga.' });
+        }
+        const existing = await db.query<{ status: string; version: number }>('SELECT status,version FROM floor_plans WHERE id=$1 AND organization_id=$2', [intent.id, intent.organizationId]);
+        if (existing.rowCount) return { id: intent.id, ...existing.rows[0] };
+        // Read, validate, seal and reread the actual S3 bytes BEFORE opening the DB transaction.
+        const sealed = await storage.finalizePlan(intent.objectKey, intent.sizeBytes, intent.contentType, intent.organizationId, intent.floorId);
+        const connection = await db.connect();
+        try {
+          await connection.query('BEGIN');
+          const floor = await connection.query('SELECT status FROM floors WHERE id=$1 AND organization_id=$2 FOR UPDATE', [intent.floorId, intent.organizationId]);
+          if (floor.rows[0]?.status !== 'active') {
+            await connection.query('ROLLBACK');
+            return reply.code(409).send({ error: 'FLOOR_UNAVAILABLE', message: 'La planta está inactiva.' });
+          }
+          const duplicate = await connection.query<{ status: string; version: number }>('SELECT status,version FROM floor_plans WHERE id=$1 AND organization_id=$2', [intent.id, intent.organizationId]);
+          if (duplicate.rowCount) {
+            await connection.query('ROLLBACK');
+            return { id: intent.id, ...duplicate.rows[0] };
+          }
+          const file = await connection.query<{ id: string }>(
+            `INSERT INTO stored_files (organization_id,uploaded_by,object_key,original_name,content_type,size_bytes,status,checksum_sha256,verified_at)
+             VALUES ($1,$2,$3,$4,$5,$6,'ready',$7,now()) RETURNING id`,
+            [intent.organizationId, intent.userId, sealed.objectKey, intent.name, intent.contentType, intent.sizeBytes, sealed.checksum]
+          );
+          await connection.query("UPDATE floor_plans SET status='superseded' WHERE organization_id=$1 AND floor_id=$2 AND status='ready'", [intent.organizationId, intent.floorId]);
+          const plan = await connection.query<{ version: number }>(
+            `INSERT INTO floor_plans (id,organization_id,floor_id,stored_file_id,title,version,uploaded_by,status,ready_at)
+             SELECT $1,$2,$3,$4,$5,COALESCE(MAX(version),0)+1,$6,'ready',now() FROM floor_plans WHERE organization_id=$2 AND floor_id=$3 RETURNING version`,
+            [intent.id, intent.organizationId, intent.floorId, file.rows[0].id, intent.title, intent.userId]
+          );
+          await recordAudit(connection, request, 'plan.upload.request', 'floor_plan', intent.id, { floorId: intent.floorId, name: intent.name, version: plan.rows[0].version });
+          await recordAudit(connection, request, 'plan.upload.complete', 'floor_plan', intent.id, { version: plan.rows[0].version, status: 'ready', checksumSha256: sealed.checksum });
+          await connection.query('COMMIT');
+          return { id: intent.id, status: 'ready', version: plan.rows[0].version };
+        } catch (error) { await connection.query('ROLLBACK'); throw error; } finally { connection.release(); }
+      } catch (error) {
+        if (error instanceof PlanFileError) return reply.code(error.statusCode).send({ error: error.code, message: error.message });
+        if ((error as { name?: string }).name === 'NoSuchKey') return reply.code(409).send({ error: 'UPLOAD_NOT_FOUND', message: 'El archivo no fue transferido; no se creó ninguna versión.' });
+        return reply.code(503).send({ error: 'STORAGE_UNAVAILABLE', message: 'No se pudo confirmar la carga. Reintenta la confirmación con la misma autorización.' });
+      }
+    }
+    // Compatibility for previously registered pending versions. No automatic retries or cleanup.
     type PendingPlan = { object_key: string; size_bytes: string; content_type: string; floor_id: string; status: string; version: number };
     const organizationId = request.authUser!.organizationId;
     const plan = await db.query<PendingPlan>(

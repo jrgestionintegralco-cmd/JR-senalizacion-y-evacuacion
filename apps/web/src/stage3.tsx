@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building, Download, FileUp, Layers3, Pencil, Plus, X } from 'lucide-react';
 import { api } from './api';
+import { uploadPlan } from './upload-plan';
 import type { Project } from './stage2';
 
 type BuildingRow = { id: string; projectId: string; projectName: string; establishmentName: string; code: string | null; name: string; description: string | null; status: 'active' | 'inactive'; floorCount: number };
@@ -67,10 +68,7 @@ export function Stage3Page() {
     if (!(file instanceof File) || !file.size) return setMessage('Selecciona un archivo PDF, PNG o JPG.');
     setBusy(true);
     try {
-      const created = await api<{ id: string; uploadUrl: string }> (`/floors/${uploadFloor.id}/plans/presign`, { method: 'POST', body: JSON.stringify({ name: file.name, title: value(data, 'title'), contentType: file.type, sizeBytes: file.size }) });
-      const sent = await fetch(created.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      if (!sent.ok) throw new Error('El almacenamiento no aceptó el archivo.');
-      await api(`/floor-plans/${created.id}/complete`, { method: 'POST' });
+      await uploadPlan(uploadFloor.id, value(data, 'title'), file);
       setUploadFloor(null); setMessage('Plano validado y guardado. Consulta su versión y estado en el historial.'); await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No fue posible cargar el plano.'); }
     finally { setBusy(false); }

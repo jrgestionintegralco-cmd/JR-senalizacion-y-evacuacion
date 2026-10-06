@@ -1,8 +1,9 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Config } from './config.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { PlanFileError, validatePlanBytes } from './plan-validation.js';
+import { signPlanUploadIntent, verifyPlanUploadIntent, type PlanUploadIntent } from './plan-upload-intent.js';
 
 export function createStorage(config: Config) {
   const options = {
@@ -35,6 +36,22 @@ export function createStorage(config: Config) {
   }
 
   return {
+    signPlanUploadIntent(intent: PlanUploadIntent) { return signPlanUploadIntent(intent, config.S3_SECRET_KEY); },
+    verifyPlanUploadIntent(token: string) { return verifyPlanUploadIntent(token, config.S3_SECRET_KEY); },
+    async ensurePlanStorageAvailable() {
+      const endpoint = new URL(config.S3_PUBLIC_ENDPOINT ?? config.S3_ENDPOINT);
+      const host = endpoint.hostname.toLowerCase();
+      if (config.NODE_ENV === 'production' && (endpoint.protocol !== 'https:' ||
+          host === 'localhost' || host.endsWith('.localhost') || host.startsWith('127.') ||
+          host === '[::1]' || host === '0.0.0.0')) {
+        throw new PlanFileError('STORAGE_NOT_CONFIGURED', 'El almacenamiento de staging necesita un endpoint HTTPS accesible desde el navegador.', 503);
+      }
+      try {
+        await client.send(new HeadBucketCommand({ Bucket: config.S3_BUCKET }), { abortSignal: AbortSignal.timeout(5_000) });
+      } catch {
+        throw new PlanFileError('STORAGE_UNAVAILABLE', 'El almacenamiento no está disponible. No se creó ninguna versión; intenta más tarde.', 503);
+      }
+    },
     createUploadUrl(objectKey: string, contentType: string, sizeBytes?: number) {
       return getSignedUrl(
         publicClient,
